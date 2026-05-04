@@ -82,7 +82,11 @@ cmd_deploy() {
   prompt_if_empty backend_subnet_id "BackendSubnetId"
   prompt_if_empty api_access_subnet_id "ApiAccessSubnetId"
   prompt_if_empty deployment_assets_bucket_name "DeploymentAssetsBucketName"
-  prompt_if_empty source_access_point_arn "SourceAccessPointArn"
+  local default_access_point="arn:aws:s3:us-east-1:686591367145:accesspoint/aws-capabilities-public"
+  prompt_if_empty source_access_point_arn "SourceAccessPointArn (default: $default_access_point)"
+  if [[ -z "$source_access_point_arn" ]]; then
+    source_access_point_arn="$default_access_point"
+  fi
   prompt_if_empty source_folders "SourceFolders (comma-separated, default: public)"
   if [[ -z "$source_folders" ]]; then
     source_folders="public"
@@ -108,7 +112,7 @@ cmd_deploy() {
   aws s3 cp "$SCRIPT_DIR/dist/lambda/lambdaAssets.zip" "s3://$deployment_assets_bucket_name/$lambda_key"
 
   echo "── Deploying CloudFormation stack (this will likely take ~15 minutes for first time deployment) ──"
-  aws cloudformation deploy \
+  AWS_PAGER="" aws cloudformation deploy \
     --template-file "$SCRIPT_DIR/dist/template/capability-insights.template.json" \
     --stack-name CapabilityInsightsForAWS \
     --parameter-overrides \
@@ -120,7 +124,7 @@ cmd_deploy() {
       SourceAccessPointArn="$source_access_point_arn" \
       SourceFolders="$source_folders" \
     --capabilities CAPABILITY_NAMED_IAM \
-    --no-cli-pager 2>&1 | tee /tmp/cfn-deploy.log &
+    2>&1 | tee /tmp/cfn-deploy.log &
   local deploy_pid=$!
   local elapsed=0
   local status="STARTING"
@@ -211,7 +215,7 @@ cmd_deploy() {
   echo "✓ Deployment complete"
   echo ""
   echo "Website URL (accessible from within your VPC):"
-  echo "  http://${website_bucket}.s3-website-${REGION}.amazonaws.com"
+  echo "  http://${website_bucket}.s3-website.${REGION}.amazonaws.com"
 }
 
 cmd_teardown() {

@@ -661,5 +661,12 @@ def lambda_handler(event, context):
     new cdk.CfnOutput(this, CapabilityInsightsStackOutputs.WebsiteBucketArn, {
       value: cdk.Fn.getAtt(websiteBucket.logicalId, 'Arn').toString(),
     });
+
+    new cdk.CfnOutput(this, 'WebsiteUrl', {
+      value: cdk.Fn.sub(
+        'http://capability-insights-website-${AWS::AccountId}-${AWS::Region}.s3-website.${AWS::Region}.amazonaws.com',
+      ),
+      description: 'URL of the Capability Insights website (accessible from within the VPC)',
+    });
   }
 }

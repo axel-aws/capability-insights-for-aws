@@ -30,6 +30,12 @@ exports[`CloudFormation template matches snapshot 1`] = `
         "Ref": "capabilityinsightswebsite",
       },
     },
+    "WebsiteUrl": {
+      "Description": "URL of the Capability Insights website (accessible from within the VPC)",
+      "Value": {
+        "Fn::Sub": "http://capability-insights-website-\${AWS::AccountId}-\${AWS::Region}.s3-website.\${AWS::Region}.amazonaws.com",
+      },
+    },
   },
   "Parameters": {
     "AnalysisStateMachineArn": {

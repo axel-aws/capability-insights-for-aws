@@ -79,13 +79,24 @@ export class CapabilityInsightsSampleEnvironmentStack extends cdk.Stack {
       routeTableId: publicRouteTable.attrRouteTableId,
     });
 
-    // VPC Gateway Endpoint to S3 - so instances can call S3
+    // Route table for the private subnet so it can reach S3 via the Gateway endpoint
+    const privateRouteTableName = `${vpcName}PrivateRouteTable`;
+    const privateRouteTable = new ec2.CfnRouteTable(this, privateRouteTableName, {
+      vpcId: this.vpc.attrVpcId,
+      tags: [{ key: 'Name', value: privateRouteTableName }],
+    });
+    new ec2.CfnSubnetRouteTableAssociation(this, `${privateSubnetName}RouteTableAssociation`, {
+      subnetId: this.privateSubnet.attrSubnetId,
+      routeTableId: privateRouteTable.attrRouteTableId,
+    });
+
+    // VPC Gateway Endpoint to S3 - so instances and Lambda can call S3
     const vpcS3EndpointName = `${vpcName}S3Endpoint`;
     new ec2.CfnVPCEndpoint(this, vpcS3EndpointName, {
       vpcId: this.vpc.attrVpcId,
       vpcEndpointType: 'Gateway',
       serviceName: cdk.Fn.sub('com.amazonaws.${AWS::Region}.s3'),
-      routeTableIds: [publicRouteTable.attrRouteTableId],
+      routeTableIds: [publicRouteTable.attrRouteTableId, privateRouteTable.attrRouteTableId],
       policyDocument: {
         Version: '2012-10-17',
         Statement: [
