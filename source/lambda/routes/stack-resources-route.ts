@@ -58,7 +58,10 @@ export const stackResourcesRoute = async (
   try {
     const bucketName = getEnv(EnvironmentKey.WEBSITE_BUCKET_NAME);
     const s3Client = new S3BucketClient(bucketName);
-    const cfnResourcesJson = await s3Client.getObject('data/json/cfn_resources.json');
+    const cfnResourcesJson = await Promise.race([
+      s3Client.getObject('data/json/cfn_resources.json'),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('S3 read timed out after 5s')), 5000)),
+    ]);
     const cfnResources: CfnResource[] = JSON.parse(cfnResourcesJson);
     propertyMapping = buildPropertyMapping(cfnResources);
   } catch (e) {
