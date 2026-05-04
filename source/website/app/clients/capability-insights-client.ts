@@ -3,6 +3,7 @@ import type { Product } from '@capability-insights/shared/types/capability/produ
 import type { ApiService } from '@capability-insights/shared/types/capability/api';
 import type { CfnResource } from '@capability-insights/shared/types/capability/cfn';
 import type { SyncMetadata } from '@capability-insights/shared/types/sync-metadata';
+import type { StackResourcesResponse } from '@capability-insights/shared/types/capability/stack';
 import { s3Client } from './s3-client';
 
 export enum DataFormat {
@@ -67,6 +68,27 @@ export class CapabilityInsightsClient {
 
   async getLastSyncTime(): Promise<SyncMetadata | null> {
     return await s3Client.fetchJson<SyncMetadata>('/data/sync-metadata.json');
+  }
+
+  async listStacks(): Promise<string[]> {
+    const baseUrl = await this.getApiBaseUrl();
+    const res = await fetch(`${baseUrl}/stacks`);
+    if (!res.ok) {
+      const body = await res.json();
+      throw new Error(body.message ?? `Failed to list stacks: ${res.status}`);
+    }
+    const data = await res.json();
+    return data.stacks;
+  }
+
+  async getStackResourceTypes(stackName: string): Promise<StackResourcesResponse> {
+    const baseUrl = await this.getApiBaseUrl();
+    const res = await fetch(`${baseUrl}/stacks/${encodeURIComponent(stackName)}/resources`);
+    if (!res.ok) {
+      const body = await res.json();
+      throw new Error(body.message ?? `Failed to get stack resources: ${res.status}`);
+    }
+    return res.json();
   }
 }
 

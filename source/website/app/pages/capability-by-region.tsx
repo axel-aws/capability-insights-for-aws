@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import ContentLayout from '@cloudscape-design/components/content-layout';
 import Header from '@cloudscape-design/components/header';
 import SpaceBetween from '@cloudscape-design/components/space-between';
@@ -9,15 +9,20 @@ import ColumnLayout from '@cloudscape-design/components/column-layout';
 import Link from '@cloudscape-design/components/link';
 import Popover from '@cloudscape-design/components/popover';
 import StatusIndicator from '@cloudscape-design/components/status-indicator';
+import Flashbar from '@cloudscape-design/components/flashbar';
+import Spinner from '@cloudscape-design/components/spinner';
 
 import { APP_NAME, PAGE_CAPABILITY_BY_REGION } from '~/constants/app';
 import type { Region } from '@capability-insights/shared/types/capability/region';
 import { capabilityInsightsClient, DataFile } from '~/clients/capability-insights-client';
 import type { SyncMetadata } from '@capability-insights/shared/types/sync-metadata';
+import type { StackResourcesResponse } from '@capability-insights/shared/types/capability/stack';
 import AvailabilityTable from '~/components/availability/availability-table';
 import AvailabilityStatCard from '~/components/availability/availability-stat-card';
 import RegionalAvailabilityTypeBadge from '~/components/availability/regional-availability-type-badge';
+import StackSelector from '~/components/availability/stack-selector';
 import { fromApiServices, fromCfnResources, fromProducts } from '~/mappers/regional-availability.mapper';
+import { filterByStackResources } from '~/utils/stack-filter';
 import { formatTimestamp } from '~/utils/time-utils';
 import type {
   ProductAvailability,
@@ -40,6 +45,49 @@ export default function CapabilityByRegion() {
   const [cfnRows, setCfnRows] = useState<CfnAvailability[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncMetadata, setSyncMetadata] = useState<SyncMetadata | null>(null);
+
+  const [selectedStack, setSelectedStack] = useState<string | null>(null);
+  const [stackResourceData, setStackResourceData] = useState<StackResourcesResponse | null>(null);
+  const [stackFilterLoading, setStackFilterLoading] = useState(false);
+  const [stackFilterWarning, setStackFilterWarning] = useState<string | null>(null);
+  const [stackFilterError, setStackFilterError] = useState<string | null>(null);
+
+  const handleStackSelected = useCallback(async (stackName: string | null) => {
+    setSelectedStack(stackName);
+    setStackFilterWarning(null);
+    setStackFilterError(null);
+
+    if (stackName === null) {
+      setStackResourceData(null);
+      return;
+    }
+
+    setStackFilterLoading(true);
+    try {
+      const result = await capabilityInsightsClient.getStackResourceTypes(stackName);
+      setStackResourceData(result);
+      if (result.warning) {
+        setStackFilterWarning(result.warning);
+      }
+    } catch (err) {
+      setStackFilterError(err instanceof Error ? err.message : 'Failed to get stack resources');
+      setSelectedStack(null);
+      setStackResourceData(null);
+    } finally {
+      setStackFilterLoading(false);
+    }
+  }, []);
+
+  const filteredCfnRows = useMemo(() => {
+    if (!stackResourceData) {
+      return cfnRows;
+    }
+    return filterByStackResources({
+      rows: cfnRows,
+      resourceTypePairs: stackResourceData.resourceTypePairs,
+      propertyMatches: stackResourceData.propertyMatches,
+    });
+  }, [cfnRows, stackResourceData]);
 
   useEffect(() => {
     async function load() {
@@ -199,26 +247,62 @@ export default function CapabilityByRegion() {
               label: 'CloudFormation resources',
               id: 'cfn',
               content: (
-                <AvailabilityTable
-                  title="CloudFormation resources"
-                  nameHeader="AWS Resources"
-                  regions={regions}
-                  regionalAvailability={cfnRows}
-                  downloadUrls={capabilityInsightsClient.exportUrls(DataFile.CFN_RESOURCES)}
-                  nameCell={row => (
-                    <SpaceBetween direction="horizontal" size="xs">
-                      {row.homepageUrl ? (
-                        <Link href={row.homepageUrl} external>
-                          {row.name}
-                        </Link>
-                      ) : (
-                        <span>{row.name}</span>
-                      )}
-                      <RegionalAvailabilityTypeBadge type={row.regionalAvailabilityType} />
-                    </SpaceBetween>
+                <SpaceBetween size="m">
+                  <StackSelector onStackSelected={handleStackSelected} selectedStack={selectedStack} />
+                  {stackFilterWarning && (
+                    <Flashbar
+                      items={[
+                        {
+                          type: 'warning',
+                          content: stackFilterWarning,
+                          dismissible: true,
+                          onDismiss: () => setStackFilterWarning(null),
+                          id: 'stack-filter-warning',
+                        },
+                      ]}
+                    />
                   )}
-                  loading={loading}
-                />
+                  {stackFilterError && (
+                    <Flashbar
+                      items={[
+                        {
+                          type: 'error',
+                          content: stackFilterError,
+                          dismissible: true,
+                          onDismiss: () => setStackFilterError(null),
+                          id: 'stack-filter-error',
+                        },
+                      ]}
+                    />
+                  )}
+                  {stackFilterLoading ? (
+                    <Box textAlign="center" padding="l">
+                      <Spinner size="large" />
+                      <Box variant="p" color="text-body-secondary">Loading stack resources…</Box>
+                    </Box>
+                  ) : (
+                    <AvailabilityTable
+                      title="CloudFormation resources"
+                      nameHeader="AWS Resources"
+                      regions={regions}
+                      regionalAvailability={filteredCfnRows}
+                      downloadUrls={capabilityInsightsClient.exportUrls(DataFile.CFN_RESOURCES)}
+                      nameCell={row => (
+                        <SpaceBetween direction="horizontal" size="xs">
+                          {row.homepageUrl ? (
+                            <Link href={row.homepageUrl} external>
+                              {row.name}
+                            </Link>
+                          ) : (
+                            <span>{row.name}</span>
+                          )}
+                          <RegionalAvailabilityTypeBadge type={row.regionalAvailabilityType} />
+                        </SpaceBetween>
+                      )}
+                      loading={loading}
+                    />
+                  )}
+                </SpaceBetween>
               ),
             },
           ]}

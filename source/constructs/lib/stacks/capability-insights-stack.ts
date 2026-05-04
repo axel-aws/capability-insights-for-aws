@@ -201,6 +201,18 @@ export class CapabilityInsightsStack extends cdk.Stack {
       tags: [{ key: 'Name', value: `${prefix}StepFunctionsVpcEndpoint` }],
     });
 
+    // Allows the API Lambda (in the private subnet) to call CloudFormation APIs
+    // (ListStacks, ListStackResources, GetTemplate) without needing internet access.
+    new ec2.CfnVPCEndpoint(this, `${prefix}CloudFormationVpcEndpoint`, {
+      vpcId: vpcIdParameter.valueAsString,
+      vpcEndpointType: 'Interface',
+      serviceName: cdk.Fn.sub('com.amazonaws.${AWS::Region}.cloudformation'),
+      privateDnsEnabled: true,
+      subnetIds: [privateSubnetIdParameter.valueAsString],
+      securityGroupIds: [apigwSecurityGroup.ref],
+      tags: [{ key: 'Name', value: `${prefix}CloudFormationVpcEndpoint` }],
+    });
+
     const apigw = new api.CfnRestApi(this, apigwName, {
       name: apigwName,
       description: 'Private REST API for Capability Insights',
@@ -401,6 +413,38 @@ export class CapabilityInsightsStack extends cdk.Stack {
                 Effect: 'Allow',
                 Action: ['organizations:ListAccounts', 'organizations:DescribeOrganization'],
                 Resource: '*',
+              },
+            ],
+          },
+        },
+        {
+          policyName: 'CloudFormationReadAccess',
+          policyDocument: {
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: [
+                  'cloudformation:ListStacks',
+                  'cloudformation:ListStackResources',
+                  'cloudformation:GetTemplate',
+                ],
+                Resource: '*',
+              },
+            ],
+          },
+        },
+        {
+          policyName: 'S3ReadCapabilityData',
+          policyDocument: {
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: 's3:GetObject',
+                Resource: cdk.Fn.sub('${BucketArn}/data/*', {
+                  BucketArn: cdk.Fn.getAtt(websiteBucket.logicalId, 'Arn').toString(),
+                }),
               },
             ],
           },

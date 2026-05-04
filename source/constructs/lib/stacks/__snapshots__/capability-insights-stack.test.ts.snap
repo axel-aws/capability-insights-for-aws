@@ -573,6 +573,48 @@ exports[`CloudFormation template matches snapshot 1`] = `
             },
             "PolicyName": "OrganizationsReadAccess",
           },
+          {
+            "PolicyDocument": {
+              "Statement": [
+                {
+                  "Action": [
+                    "cloudformation:ListStacks",
+                    "cloudformation:ListStackResources",
+                    "cloudformation:GetTemplate",
+                  ],
+                  "Effect": "Allow",
+                  "Resource": "*",
+                },
+              ],
+              "Version": "2012-10-17",
+            },
+            "PolicyName": "CloudFormationReadAccess",
+          },
+          {
+            "PolicyDocument": {
+              "Statement": [
+                {
+                  "Action": "s3:GetObject",
+                  "Effect": "Allow",
+                  "Resource": {
+                    "Fn::Sub": [
+                      "\${BucketArn}/data/*",
+                      {
+                        "BucketArn": {
+                          "Fn::GetAtt": [
+                            "capabilityinsightswebsite",
+                            "Arn",
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+              "Version": "2012-10-17",
+            },
+            "PolicyName": "S3ReadCapabilityData",
+          },
         ],
         "RoleName": {
           "Fn::Sub": "CapabilityInsightsApiLambdaRole-\${AWS::Region}",
@@ -594,6 +636,35 @@ exports[`CloudFormation template matches snapshot 1`] = `
         },
       },
       "Type": "AWS::EC2::SecurityGroup",
+    },
+    "CapabilityInsightsCloudFormationVpcEndpoint": {
+      "Properties": {
+        "PrivateDnsEnabled": true,
+        "SecurityGroupIds": [
+          {
+            "Ref": "CapabilityInsightsApiGwSecurityGroup",
+          },
+        ],
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.\${AWS::Region}.cloudformation",
+        },
+        "SubnetIds": [
+          {
+            "Ref": "BackendSubnetId",
+          },
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "CapabilityInsightsCloudFormationVpcEndpoint",
+          },
+        ],
+        "VpcEndpointType": "Interface",
+        "VpcId": {
+          "Ref": "PrivateVpcId",
+        },
+      },
+      "Type": "AWS::EC2::VPCEndpoint",
     },
     "CapabilityInsightsDataFetchLambda": {
       "Properties": {
