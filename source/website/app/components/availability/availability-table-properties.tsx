@@ -3,7 +3,11 @@ import type { PropertyFilterProps } from '@cloudscape-design/components/property
 import CollectionPreferences, {
   type CollectionPreferencesProps,
 } from '@cloudscape-design/components/collection-preferences';
-import type { PropertyFilterQuery, PropertyFilterToken } from '@cloudscape-design/collection-hooks';
+import type {
+  PropertyFilterQuery,
+  PropertyFilterToken,
+  PropertyFilterTokenGroup,
+} from '@cloudscape-design/collection-hooks';
 import type { Region } from '@capability-insights/shared/types/capability/region';
 import type { RegionalAvailability } from '@capability-insights/shared/types/availability/regional-availability';
 import type { AvailabilityStatus } from '@capability-insights/shared/types/availability/availability-status';
@@ -83,35 +87,42 @@ export function createFilteringProperties(regions: Region[]): PropertyFilterProp
   ];
 }
 
+/** Detect PropertyFilterTokenGroup by checking for the 'operation' key. */
+function isTokenGroup(t: PropertyFilterToken | PropertyFilterTokenGroup): t is PropertyFilterTokenGroup {
+  return 'operation' in t;
+}
+
 /**
- * Creates a filtering function that handles regular properties, region
- * availability lookups (keys prefixed with "region:"), and parent-chain
- * inheritance. When a parent matches, its children are included too.
+ * Creates a filtering function that handles:
+ * - Recursive AND/OR evaluation of token groups
+ * - Region availability lookups (keys prefixed with "region:")
+ * - Parent-chain walking for known property keys (name, regionalAvailabilityType)
+ * - Free-text token matching against name and regionalAvailabilityType
+ * - Parent-to-child inheritance (matched parent → children included)
  */
 export function createFilteringFunction(items: RegionalAvailability[]) {
   const byId = new Map(items.map(i => [i.id, i]));
-  const matchedIds = new Set<string>();
 
-  const resolveKnownKey = (item: RegionalAvailability, key: string): string | undefined => {
-    if (key === 'name') return item.name;
-    if (key === 'regionalAvailabilityType') return item.regionalAvailabilityType;
-    return undefined;
-  };
-
-  const resolve = (item: RegionalAvailability, key: string): string | undefined => {
+  // --- Value resolution ---
+  const resolveValue = (item: RegionalAvailability, key: string): string | undefined => {
+    if (key.startsWith('region:')) {
+      return item.regionalAvailability?.[key.slice(7)];
+    }
+    // Walk parent chain for known keys
     let current: RegionalAvailability | undefined = item;
     while (current) {
-      const value = resolveKnownKey(current, key);
-      if (value !== undefined) return value;
+      if (key === 'name' && current.name !== undefined) return current.name;
+      if (key === 'regionalAvailabilityType' && current.regionalAvailabilityType !== undefined)
+        return current.regionalAvailabilityType;
       current = current.parentId ? byId.get(current.parentId) : undefined;
     }
     return undefined;
   };
 
+  // --- Single token value matching ---
   const tokenMatches = (value: string | undefined, token: PropertyFilterToken): boolean => {
     const tokenValues: string[] = Array.isArray(token.value) ? token.value : [token.value];
     const stringValue = value ?? '';
-
     switch (token.operator) {
       case '=':
         return tokenValues.includes(stringValue);
@@ -126,30 +137,44 @@ export function createFilteringFunction(items: RegionalAvailability[]) {
     }
   };
 
-  const matchesTokens = (item: RegionalAvailability, tokens: readonly PropertyFilterToken[]): boolean => {
-    for (const token of tokens) {
-      if (!token.propertyKey) continue;
-
-      const isRegion = token.propertyKey.startsWith('region:');
-      const value = isRegion
-        ? item.regionalAvailability?.[token.propertyKey.slice(7)]
-        : resolve(item, token.propertyKey);
-
-      if (!tokenMatches(value, token)) return false;
-    }
-    return true;
+  // --- Free-text token matching ---
+  const freeTextMatches = (item: RegionalAvailability, token: PropertyFilterToken): boolean => {
+    const isNegation = token.operator.startsWith('!');
+    const keys = ['name', 'regionalAvailabilityType'];
+    return keys[isNegation ? 'every' : 'some'](key => {
+      const value = resolveValue(item, key);
+      return tokenMatches(value, token);
+    });
   };
 
-  const hasMatchedAncestor = (item: RegionalAvailability): boolean => {
-    let current = item.parentId ? byId.get(item.parentId) : undefined;
-    while (current) {
-      if (matchedIds.has(current.id)) return true;
-      current = current.parentId ? byId.get(current.parentId) : undefined;
+  // --- Evaluate a single token ---
+  const evaluateToken = (item: RegionalAvailability, token: PropertyFilterToken): boolean => {
+    if (!token.propertyKey) {
+      return freeTextMatches(item, token);
     }
-    return false;
+    const value = resolveValue(item, token.propertyKey);
+    return tokenMatches(value, token);
   };
 
+  // --- Recursive evaluate (mirrors Cloudscape defaultFilteringFunction) ---
+  const evaluate = (
+    item: RegionalAvailability,
+    tokenOrGroup: PropertyFilterToken | PropertyFilterTokenGroup,
+  ): boolean => {
+    if (isTokenGroup(tokenOrGroup)) {
+      const { operation, tokens } = tokenOrGroup;
+      if (operation === 'and') {
+        return tokens.every(child => evaluate(item, child));
+      }
+      // 'or': return true if at least one child is true; empty 'or' returns false
+      return tokens.length > 0 && tokens.some(child => evaluate(item, child));
+    }
+    return evaluateToken(item, tokenOrGroup);
+  };
+
+  // --- Parent-chain inheritance ---
   let lastQuery: PropertyFilterQuery | null = null;
+  const matchedIds = new Set<string>();
 
   return (item: RegionalAvailability, query: PropertyFilterQuery): boolean => {
     if (query !== lastQuery) {
@@ -157,14 +182,26 @@ export function createFilteringFunction(items: RegionalAvailability[]) {
       lastQuery = query;
     }
 
-    const tokens = query.tokenGroups ?? query.tokens;
+    // Build the root token group from the query
+    const rootGroup: PropertyFilterTokenGroup = {
+      operation: query.operation,
+      tokens: query.tokenGroups ?? query.tokens,
+    };
 
-    if (matchesTokens(item, tokens as readonly PropertyFilterToken[])) {
+    // Direct match via recursive evaluation
+    if (evaluate(item, rootGroup)) {
       matchedIds.add(item.id);
       return true;
     }
 
-    return hasMatchedAncestor(item);
+    // Parent-chain inheritance: include child if an ancestor genuinely matches
+    let current = item.parentId ? byId.get(item.parentId) : undefined;
+    while (current) {
+      if (matchedIds.has(current.id)) return true;
+      current = current.parentId ? byId.get(current.parentId) : undefined;
+    }
+
+    return false;
   };
 }
 
