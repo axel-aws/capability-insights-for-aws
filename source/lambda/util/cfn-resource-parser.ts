@@ -73,10 +73,7 @@ export function isIntrinsicFunction(value: unknown): boolean {
  * Parses a CloudFormation template JSON body and extracts plain string property
  * values that match the property mapping.
  */
-export function extractPropertyValues(
-  templateBody: string,
-  propertyMapping: PropertyMapping,
-): PropertyMatch[] {
+export function extractPropertyValues(templateBody: string, propertyMapping: PropertyMapping): PropertyMatch[] {
   const matches: PropertyMatch[] = [];
 
   let template: Record<string, unknown>;

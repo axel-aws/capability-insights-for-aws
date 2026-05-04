@@ -39,7 +39,7 @@ export const stackResourcesRoute = async (
   try {
     const resourceTypes = await cloudFormationClient.listStackResourceTypes(stackName);
     const parsed = resourceTypes
-      .map((type) => parseResourceType(type))
+      .map(type => parseResourceType(type))
       .filter((pair): pair is ResourceTypePair => pair !== null);
     resourceTypePairs = deduplicateResourceTypePairs(parsed);
   } catch (e) {

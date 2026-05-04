@@ -1,11 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fc from 'fast-check';
-import {
-  CloudFormationClient,
-  ListStacksCommand,
-  ListStackResourcesCommand,
-  GetTemplateCommand,
-} from '@aws-sdk/client-cloudformation';
+import { ListStacksCommand, ListStackResourcesCommand, GetTemplateCommand } from '@aws-sdk/client-cloudformation';
 import { CloudFormationServiceClient, ACTIVE_STACK_STATUSES } from './cloudformation-client';
 
 const { mockSend } = vi.hoisted(() => ({
@@ -162,10 +157,7 @@ describe('CloudFormationServiceClient', () => {
   describe('listStackResourceTypes', () => {
     it('returns resource types from a single page', async () => {
       mockSend.mockResolvedValueOnce({
-        StackResourceSummaries: [
-          { ResourceType: 'AWS::EC2::Instance' },
-          { ResourceType: 'AWS::S3::Bucket' },
-        ],
+        StackResourceSummaries: [{ ResourceType: 'AWS::EC2::Instance' }, { ResourceType: 'AWS::S3::Bucket' }],
         NextToken: undefined,
       });
 
@@ -280,9 +272,7 @@ describe('CloudFormationServiceClient', () => {
     it('throws an error when the API call fails', async () => {
       mockSend.mockRejectedValueOnce(new Error('Access denied'));
 
-      await expect(serviceClient.getTemplate('my-stack')).rejects.toThrow(
-        "Failed to get template for 'my-stack'",
-      );
+      await expect(serviceClient.getTemplate('my-stack')).rejects.toThrow("Failed to get template for 'my-stack'");
     });
   });
 });
@@ -341,12 +331,12 @@ describe('Feature: stack-resource-filter, Property 1: Stack status filtering pre
   function filterByActiveStatuses(
     stacks: { stackName: string; status: string }[],
   ): { stackName: string; status: string }[] {
-    return stacks.filter((s) => allowedStatusSet.has(s.status));
+    return stacks.filter(s => allowedStatusSet.has(s.status));
   }
 
   it('should return only stacks with allowed statuses', () => {
     fc.assert(
-      fc.property(stackSummariesArb, (stacks) => {
+      fc.property(stackSummariesArb, stacks => {
         const filtered = filterByActiveStatuses(stacks);
 
         // Every stack in the result must have an allowed status
@@ -360,11 +350,11 @@ describe('Feature: stack-resource-filter, Property 1: Stack status filtering pre
 
   it('should not exclude any stack with an allowed status', () => {
     fc.assert(
-      fc.property(stackSummariesArb, (stacks) => {
+      fc.property(stackSummariesArb, stacks => {
         const filtered = filterByActiveStatuses(stacks);
 
         // Every stack from the input that has an allowed status must appear in the result
-        const expectedAllowed = stacks.filter((s) => allowedStatusSet.has(s.status));
+        const expectedAllowed = stacks.filter(s => allowedStatusSet.has(s.status));
         expect(filtered).toEqual(expectedAllowed);
       }),
       { numRuns: 100 },
@@ -373,11 +363,11 @@ describe('Feature: stack-resource-filter, Property 1: Stack status filtering pre
 
   it('should never include a stack with a disallowed status', () => {
     fc.assert(
-      fc.property(stackSummariesArb, (stacks) => {
+      fc.property(stackSummariesArb, stacks => {
         const filtered = filterByActiveStatuses(stacks);
 
         // No stack in the result should have a status outside the allowed set
-        const disallowed = filtered.filter((s) => !allowedStatusSet.has(s.status));
+        const disallowed = filtered.filter(s => !allowedStatusSet.has(s.status));
         expect(disallowed).toEqual([]);
       }),
       { numRuns: 100 },
@@ -386,11 +376,11 @@ describe('Feature: stack-resource-filter, Property 1: Stack status filtering pre
 
   it('should preserve the count of allowed stacks from the input', () => {
     fc.assert(
-      fc.property(stackSummariesArb, (stacks) => {
+      fc.property(stackSummariesArb, stacks => {
         const filtered = filterByActiveStatuses(stacks);
 
         // The number of filtered stacks should equal the number of input stacks with allowed statuses
-        const expectedCount = stacks.filter((s) => allowedStatusSet.has(s.status)).length;
+        const expectedCount = stacks.filter(s => allowedStatusSet.has(s.status)).length;
         expect(filtered.length).toBe(expectedCount);
       }),
       { numRuns: 100 },

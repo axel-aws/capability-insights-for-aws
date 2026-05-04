@@ -38,10 +38,7 @@ describe('stackResourcesRoute', () => {
   });
 
   it('returns 200 with resource type pairs and property matches on success', async () => {
-    mockListStackResourceTypes.mockResolvedValueOnce([
-      'AWS::EC2::Instance',
-      'AWS::S3::Bucket',
-    ]);
+    mockListStackResourceTypes.mockResolvedValueOnce(['AWS::EC2::Instance', 'AWS::S3::Bucket']);
 
     const cfnResources = [
       {
@@ -54,9 +51,7 @@ describe('stackResourcesRoute', () => {
             resourceProperties: [
               {
                 resourcePropertyName: 'InstanceType',
-                resourceConfigurations: [
-                  { resourceConfigurationName: 't3.micro', regionalAvailability: {} },
-                ],
+                resourceConfigurations: [{ resourceConfigurationName: 't3.micro', regionalAvailability: {} }],
               },
             ],
           },
@@ -141,9 +136,7 @@ describe('stackResourcesRoute', () => {
             resourceProperties: [
               {
                 resourcePropertyName: 'InstanceType',
-                resourceConfigurations: [
-                  { resourceConfigurationName: 't3.micro', regionalAvailability: {} },
-                ],
+                resourceConfigurations: [{ resourceConfigurationName: 't3.micro', regionalAvailability: {} }],
               },
             ],
           },
@@ -157,9 +150,7 @@ describe('stackResourcesRoute', () => {
 
     expect(result.statusCode).toBe(StatusCode.OK);
     const body = JSON.parse(result.body);
-    expect(body.resourceTypePairs).toEqual([
-      { serviceName: 'EC2', resourceTypeName: 'Instance' },
-    ]);
+    expect(body.resourceTypePairs).toEqual([{ serviceName: 'EC2', resourceTypeName: 'Instance' }]);
     expect(body.propertyMatches).toEqual([]);
     expect(body.warning).toContain('Could not retrieve template');
     expect(result.headers).toEqual(corsHeaders);
@@ -173,9 +164,7 @@ describe('stackResourcesRoute', () => {
 
     expect(result.statusCode).toBe(StatusCode.OK);
     const body = JSON.parse(result.body);
-    expect(body.resourceTypePairs).toEqual([
-      { serviceName: 'S3', resourceTypeName: 'Bucket' },
-    ]);
+    expect(body.resourceTypePairs).toEqual([{ serviceName: 'S3', resourceTypeName: 'Bucket' }]);
     expect(body.propertyMatches).toEqual([]);
     expect(body.warning).toContain('Could not read capability data');
     expect(result.headers).toEqual(corsHeaders);

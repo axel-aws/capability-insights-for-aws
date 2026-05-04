@@ -1,9 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import fc from 'fast-check';
-import { parseResourceType, deduplicateResourceTypePairs, buildPropertyMapping, isIntrinsicFunction, extractPropertyValues } from './cfn-resource-parser';
+import {
+  parseResourceType,
+  deduplicateResourceTypePairs,
+  buildPropertyMapping,
+  isIntrinsicFunction,
+  extractPropertyValues,
+} from './cfn-resource-parser';
 import type { PropertyMapping } from './cfn-resource-parser';
 import type { ResourceTypePair } from '@capability-insights/shared/types/capability/stack';
-import type { CfnResource, CfnResourceProperty, CfnResourceType, CfnResourceConfiguration } from '@capability-insights/shared/types/capability/cfn';
+import type {
+  CfnResource,
+  CfnResourceProperty,
+  CfnResourceType,
+  CfnResourceConfiguration,
+} from '@capability-insights/shared/types/capability/cfn';
 
 /**
  * Feature: stack-resource-filter, Property 2: Resource type parsing round-trip
@@ -15,31 +26,26 @@ describe('Feature: stack-resource-filter, Property 2: Resource type parsing roun
 
   it('parsing a valid AWS resource type string produces the correct serviceName and resourceTypeName, and round-trips back to the original string', () => {
     fc.assert(
-      fc.property(
-        alphanumericNonEmpty,
-        alphanumericNonEmpty,
-        (serviceName, resourceTypeName) => {
-          const fullType = `AWS::${serviceName}::${resourceTypeName}`;
+      fc.property(alphanumericNonEmpty, alphanumericNonEmpty, (serviceName, resourceTypeName) => {
+        const fullType = `AWS::${serviceName}::${resourceTypeName}`;
 
-          const result = parseResourceType(fullType);
+        const result = parseResourceType(fullType);
 
-          // Parsing should succeed (not return null)
-          expect(result).not.toBeNull();
+        // Parsing should succeed (not return null)
+        expect(result).not.toBeNull();
 
-          // Should produce the correct serviceName and resourceTypeName
-          expect(result!.serviceName).toBe(serviceName);
-          expect(result!.resourceTypeName).toBe(resourceTypeName);
+        // Should produce the correct serviceName and resourceTypeName
+        expect(result!.serviceName).toBe(serviceName);
+        expect(result!.resourceTypeName).toBe(resourceTypeName);
 
-          // Round-trip: reconstructing the string should equal the original
-          const roundTripped = `AWS::${result!.serviceName}::${result!.resourceTypeName}`;
-          expect(roundTripped).toBe(fullType);
-        },
-      ),
+        // Round-trip: reconstructing the string should equal the original
+        const roundTripped = `AWS::${result!.serviceName}::${result!.resourceTypeName}`;
+        expect(roundTripped).toBe(fullType);
+      }),
       { numRuns: 100 },
     );
   });
 });
-
 
 /**
  * Feature: stack-resource-filter, Property 3: Resource type pair deduplication
@@ -59,22 +65,20 @@ describe('Feature: stack-resource-filter, Property 3: Resource type pair dedupli
   // Generate a base array, then duplicate some elements to ensure duplicates exist
   const pairsWithDuplicatesArb: fc.Arbitrary<ResourceTypePair[]> = fc
     .array(resourceTypePairArb, { minLength: 1, maxLength: 30 })
-    .chain((basePairs) =>
-      fc
-        .array(fc.nat({ max: basePairs.length - 1 }), { minLength: 0, maxLength: 20 })
-        .map((indices) => {
-          const duplicates = indices.map((i) => ({ ...basePairs[i] }));
-          return [...basePairs, ...duplicates];
-        }),
+    .chain(basePairs =>
+      fc.array(fc.nat({ max: basePairs.length - 1 }), { minLength: 0, maxLength: 20 }).map(indices => {
+        const duplicates = indices.map(i => ({ ...basePairs[i] }));
+        return [...basePairs, ...duplicates];
+      }),
     );
 
   it('no two output elements share the same serviceName and resourceTypeName', () => {
     fc.assert(
-      fc.property(pairsWithDuplicatesArb, (pairs) => {
+      fc.property(pairsWithDuplicatesArb, pairs => {
         const result = deduplicateResourceTypePairs(pairs);
 
         // Build a set of keys from the output and verify no duplicates
-        const keys = result.map((p) => `${p.serviceName}::${p.resourceTypeName}`);
+        const keys = result.map(p => `${p.serviceName}::${p.resourceTypeName}`);
         const uniqueKeys = new Set(keys);
         expect(uniqueKeys.size).toBe(keys.length);
       }),
@@ -84,16 +88,14 @@ describe('Feature: stack-resource-filter, Property 3: Resource type pair dedupli
 
   it('every unique pair from input appears exactly once in output', () => {
     fc.assert(
-      fc.property(pairsWithDuplicatesArb, (pairs) => {
+      fc.property(pairsWithDuplicatesArb, pairs => {
         const result = deduplicateResourceTypePairs(pairs);
 
         // Compute the set of unique keys from the input
-        const inputUniqueKeys = new Set(
-          pairs.map((p) => `${p.serviceName}::${p.resourceTypeName}`),
-        );
+        const inputUniqueKeys = new Set(pairs.map(p => `${p.serviceName}::${p.resourceTypeName}`));
 
         // Compute the set of keys from the output
-        const outputKeys = result.map((p) => `${p.serviceName}::${p.resourceTypeName}`);
+        const outputKeys = result.map(p => `${p.serviceName}::${p.resourceTypeName}`);
         const outputUniqueKeys = new Set(outputKeys);
 
         // Every unique input pair must appear in the output
@@ -111,7 +113,6 @@ describe('Feature: stack-resource-filter, Property 3: Resource type pair dedupli
     );
   });
 });
-
 
 /**
  * Feature: stack-resource-filter, Property 4: Dynamic property mapping correctness
@@ -155,7 +156,7 @@ describe('Feature: stack-resource-filter, Property 4: Dynamic property mapping c
 
   it('mapping contains an entry for a resource type iff it has at least one property with non-empty resourceConfigurations', () => {
     fc.assert(
-      fc.property(cfnResourcesArb, (cfnResources) => {
+      fc.property(cfnResourcesArb, cfnResources => {
         const mapping = buildPropertyMapping(cfnResources);
 
         // Compute expected keys: resource types that have at least one property with non-empty resourceConfigurations
@@ -164,7 +165,7 @@ describe('Feature: stack-resource-filter, Property 4: Dynamic property mapping c
           for (const resourceType of resource.resourceTypes) {
             const key = `${resource.serviceName}::${resourceType.resourceTypeName}`;
             const hasConfiguredProperty = (resourceType.resourceProperties ?? []).some(
-              (prop) => prop.resourceConfigurations.length > 0,
+              prop => prop.resourceConfigurations.length > 0,
             );
             if (hasConfiguredProperty) {
               expectedKeys.add(key);
@@ -190,7 +191,7 @@ describe('Feature: stack-resource-filter, Property 4: Dynamic property mapping c
 
   it('mapped property names exactly match the resourcePropertyName values of properties with non-empty resourceConfigurations', () => {
     fc.assert(
-      fc.property(cfnResourcesArb, (cfnResources) => {
+      fc.property(cfnResourcesArb, cfnResources => {
         const mapping = buildPropertyMapping(cfnResources);
 
         // For each resource type, compute the expected property names
@@ -198,8 +199,8 @@ describe('Feature: stack-resource-filter, Property 4: Dynamic property mapping c
           for (const resourceType of resource.resourceTypes) {
             const key = `${resource.serviceName}::${resourceType.resourceTypeName}`;
             const expectedPropertyNames = (resourceType.resourceProperties ?? [])
-              .filter((prop) => prop.resourceConfigurations.length > 0)
-              .map((prop) => prop.resourcePropertyName);
+              .filter(prop => prop.resourceConfigurations.length > 0)
+              .map(prop => prop.resourcePropertyName);
 
             if (expectedPropertyNames.length === 0) {
               // No entry should exist for this key (unless another CfnResource with the same
@@ -224,8 +225,8 @@ describe('Feature: stack-resource-filter, Property 4: Dynamic property mapping c
           for (const resourceType of resource.resourceTypes) {
             const key = `${resource.serviceName}::${resourceType.resourceTypeName}`;
             const propNames = (resourceType.resourceProperties ?? [])
-              .filter((prop) => prop.resourceConfigurations.length > 0)
-              .map((prop) => prop.resourcePropertyName);
+              .filter(prop => prop.resourceConfigurations.length > 0)
+              .map(prop => prop.resourcePropertyName);
             if (!allExpectedByKey.has(key)) {
               allExpectedByKey.set(key, []);
             }
@@ -243,7 +244,6 @@ describe('Feature: stack-resource-filter, Property 4: Dynamic property mapping c
     );
   });
 });
-
 
 /**
  * Feature: stack-resource-filter, Property 5: Intrinsic function detection
@@ -268,7 +268,7 @@ describe('Feature: stack-resource-filter, Property 5: Intrinsic function detecti
   );
 
   // Arbitrary for intrinsic function objects (e.g., { Ref: "MyResource" }, { "Fn::If": [...] })
-  const intrinsicFunctionArb = intrinsicKeyArb.map((key) => ({ [key]: 'SomeValue' }));
+  const intrinsicFunctionArb = intrinsicKeyArb.map(key => ({ [key]: 'SomeValue' }));
 
   // Arbitrary for plain objects (non-intrinsic, but still objects)
   const plainObjectArb = fc.dictionary(
@@ -293,23 +293,19 @@ describe('Feature: stack-resource-filter, Property 5: Intrinsic function detecti
 
   it('returns true iff value is a non-null, non-array object', () => {
     fc.assert(
-      fc.property(
-        fc.oneof(objectValueArb, nonObjectValueArb),
-        (value) => {
-          const result = isIntrinsicFunction(value);
-          const isNonNullNonArrayObject =
-            typeof value === 'object' && value !== null && !Array.isArray(value);
+      fc.property(fc.oneof(objectValueArb, nonObjectValueArb), value => {
+        const result = isIntrinsicFunction(value);
+        const isNonNullNonArrayObject = typeof value === 'object' && value !== null && !Array.isArray(value);
 
-          expect(result).toBe(isNonNullNonArrayObject);
-        },
-      ),
+        expect(result).toBe(isNonNullNonArrayObject);
+      }),
       { numRuns: 100 },
     );
   });
 
   it('plain strings always return false', () => {
     fc.assert(
-      fc.property(fc.string(), (value) => {
+      fc.property(fc.string(), value => {
         expect(isIntrinsicFunction(value)).toBe(false);
       }),
       { numRuns: 100 },
@@ -318,7 +314,7 @@ describe('Feature: stack-resource-filter, Property 5: Intrinsic function detecti
 
   it('non-null, non-array objects always return true', () => {
     fc.assert(
-      fc.property(objectValueArb, (value) => {
+      fc.property(objectValueArb, value => {
         expect(isIntrinsicFunction(value)).toBe(true);
       }),
       { numRuns: 100 },
@@ -329,7 +325,7 @@ describe('Feature: stack-resource-filter, Property 5: Intrinsic function detecti
     fc.assert(
       fc.property(
         fc.array(fc.oneof(fc.string(), fc.integer(), fc.boolean()), { minLength: 0, maxLength: 10 }),
-        (value) => {
+        value => {
           expect(isIntrinsicFunction(value)).toBe(false);
         },
       ),
@@ -339,12 +335,9 @@ describe('Feature: stack-resource-filter, Property 5: Intrinsic function detecti
 
   it('numbers and booleans always return false', () => {
     fc.assert(
-      fc.property(
-        fc.oneof(fc.integer(), fc.double({ noNaN: true }), fc.boolean()),
-        (value) => {
-          expect(isIntrinsicFunction(value)).toBe(false);
-        },
-      ),
+      fc.property(fc.oneof(fc.integer(), fc.double({ noNaN: true }), fc.boolean()), value => {
+        expect(isIntrinsicFunction(value)).toBe(false);
+      }),
       { numRuns: 100 },
     );
   });
@@ -354,7 +347,6 @@ describe('Feature: stack-resource-filter, Property 5: Intrinsic function detecti
     expect(isIntrinsicFunction(undefined)).toBe(false);
   });
 });
-
 
 // ============================================================================
 // Unit Tests — specific examples and edge cases
@@ -542,15 +534,11 @@ describe('buildPropertyMapping — unit tests', () => {
             resourceProperties: [
               {
                 resourcePropertyName: 'EngineVersion',
-                resourceConfigurations: [
-                  { resourceConfigurationName: '8.0', regionalAvailability: {} },
-                ],
+                resourceConfigurations: [{ resourceConfigurationName: '8.0', regionalAvailability: {} }],
               },
               {
                 resourcePropertyName: 'DBInstanceClass',
-                resourceConfigurations: [
-                  { resourceConfigurationName: 'db.t3.micro', regionalAvailability: {} },
-                ],
+                resourceConfigurations: [{ resourceConfigurationName: 'db.t3.micro', regionalAvailability: {} }],
               },
             ],
           },

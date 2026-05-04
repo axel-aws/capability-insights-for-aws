@@ -10,7 +10,9 @@ import type {
 } from '@cloudscape-design/collection-hooks';
 import type { Region } from '@capability-insights/shared/types/capability/region';
 import type { RegionalAvailability } from '@capability-insights/shared/types/availability/regional-availability';
+import { RegionalAvailabilityType } from '@capability-insights/shared/types/availability/regional-availability';
 import type { AvailabilityStatus } from '@capability-insights/shared/types/availability/availability-status';
+import type { StackResourcesResponse, PropertyMatch } from '@capability-insights/shared/types/capability/stack';
 import AvailabilityStatusIndicator from '~/components/availability/availability-status-indicator';
 
 const enumOperators: PropertyFilterProps.FilteringProperty['operators'] = [
@@ -61,8 +63,11 @@ export function createColumns({
   ];
 }
 
-export function createFilteringProperties(regions: Region[]): PropertyFilterProps.FilteringProperty[] {
-  return [
+export function createFilteringProperties(
+  regions: Region[],
+  options?: { includeStackProperty?: boolean },
+): PropertyFilterProps.FilteringProperty[] {
+  const properties: PropertyFilterProps.FilteringProperty[] = [
     {
       key: 'name',
       propertyLabel: 'Name',
@@ -85,6 +90,18 @@ export function createFilteringProperties(regions: Region[]): PropertyFilterProp
       group: 'regions',
     })),
   ];
+
+  if (options?.includeStackProperty) {
+    properties.push({
+      key: 'stack',
+      propertyLabel: 'Stack',
+      groupValuesLabel: 'Stack values',
+      operators: ['=', '!='],
+      group: 'properties',
+    });
+  }
+
+  return properties;
 }
 
 /** Detect PropertyFilterTokenGroup by checking for the 'operation' key. */
@@ -93,14 +110,88 @@ function isTokenGroup(t: PropertyFilterToken | PropertyFilterTokenGroup): t is P
 }
 
 /**
+ * Determines if a RegionalAvailability item matches a stack's resources.
+ * Replicates the logic from filterByStackResources but for a single item.
+ *
+ * - SERVICE: matches if any child resource type row is in the resource type set
+ * - RESOURCE_TYPE: matches if "parentServiceName::ownName" is in the resource type set
+ * - PROPERTY: matches if the parent resource type matches
+ * - CONFIGURATION: matches if resource type matches + property value narrowing when available
+ */
+function itemMatchesStack(
+  item: RegionalAvailability,
+  data: StackResourcesResponse,
+  byId: Map<string, RegionalAvailability>,
+): boolean {
+  const resourceTypeSet = new Set(data.resourceTypePairs.map(p => `${p.serviceName}::${p.resourceTypeName}`));
+  const propertyMatchMap = new Map<string, PropertyMatch[]>();
+  for (const m of data.propertyMatches) {
+    const key = `${m.serviceName}::${m.resourceTypeName}`;
+    const arr = propertyMatchMap.get(key) ?? [];
+    arr.push(m);
+    propertyMatchMap.set(key, arr);
+  }
+
+  switch (item.regionalAvailabilityType) {
+    case RegionalAvailabilityType.SERVICE: {
+      // Service matches if any child resource type is in the stack's resource type set
+      for (const [, candidate] of byId) {
+        if (
+          candidate.parentId === item.id &&
+          candidate.regionalAvailabilityType === RegionalAvailabilityType.RESOURCE_TYPE
+        ) {
+          const key = `${item.name}::${candidate.name}`;
+          if (resourceTypeSet.has(key)) return true;
+        }
+      }
+      return false;
+    }
+    case RegionalAvailabilityType.RESOURCE_TYPE: {
+      const parent = item.parentId ? byId.get(item.parentId) : undefined;
+      const key = `${parent?.name ?? ''}::${item.name}`;
+      return resourceTypeSet.has(key);
+    }
+    case RegionalAvailabilityType.PROPERTY: {
+      // Property row matches if its parent resource type matches
+      const rtRow = item.parentId ? byId.get(item.parentId) : undefined;
+      if (!rtRow) return false;
+      const serviceRow = rtRow.parentId ? byId.get(rtRow.parentId) : undefined;
+      const key = `${serviceRow?.name ?? ''}::${rtRow.name}`;
+      return resourceTypeSet.has(key);
+    }
+    case RegionalAvailabilityType.CONFIGURATION: {
+      // Configuration row: check resource type match + property value narrowing
+      const propRow = item.parentId ? byId.get(item.parentId) : undefined;
+      const rtRow = propRow?.parentId ? byId.get(propRow.parentId) : undefined;
+      if (!rtRow) return false;
+      const serviceRow = rtRow.parentId ? byId.get(rtRow.parentId) : undefined;
+      const key = `${serviceRow?.name ?? ''}::${rtRow.name}`;
+      if (!resourceTypeSet.has(key)) return false;
+      const matches = propertyMatchMap.get(key);
+      if (matches && matches.length > 0) {
+        return matches.some(m => m.value === item.name);
+      }
+      return true; // No property matches → include all configs
+    }
+    default:
+      return false;
+  }
+}
+
+/**
  * Creates a filtering function that handles:
- * - Recursive AND/OR evaluation of token groups
+ * - Recursive AND/OR evaluation of token groups (Requirement 8)
  * - Region availability lookups (keys prefixed with "region:")
  * - Parent-chain walking for known property keys (name, regionalAvailabilityType)
+ * - Stack token evaluation via cached API calls (Requirement 9)
  * - Free-text token matching against name and regionalAvailabilityType
  * - Parent-to-child inheritance (matched parent → children included)
  */
-export function createFilteringFunction(items: RegionalAvailability[]) {
+export function createFilteringFunction(
+  items: RegionalAvailability[],
+  stackResourceCache?: Map<string, StackResourcesResponse>,
+  onStackDataNeeded?: (stackName: string) => void,
+) {
   const byId = new Map(items.map(i => [i.id, i]));
 
   // --- Value resolution ---
@@ -137,6 +228,19 @@ export function createFilteringFunction(items: RegionalAvailability[]) {
     }
   };
 
+  // --- Stack token evaluation ---
+  const evaluateStackToken = (item: RegionalAvailability, token: PropertyFilterToken): boolean => {
+    const stackName = token.value as string;
+    const data = stackResourceCache?.get(stackName);
+    if (!data) {
+      // Signal that we need this stack's data; match nothing until loaded
+      onStackDataNeeded?.(stackName);
+      return false;
+    }
+    const matches = itemMatchesStack(item, data, byId);
+    return token.operator === '=' ? matches : !matches;
+  };
+
   // --- Free-text token matching ---
   const freeTextMatches = (item: RegionalAvailability, token: PropertyFilterToken): boolean => {
     const isNegation = token.operator.startsWith('!');
@@ -149,6 +253,9 @@ export function createFilteringFunction(items: RegionalAvailability[]) {
 
   // --- Evaluate a single token ---
   const evaluateToken = (item: RegionalAvailability, token: PropertyFilterToken): boolean => {
+    if (token.propertyKey === 'stack') {
+      return evaluateStackToken(item, token);
+    }
     if (!token.propertyKey) {
       return freeTextMatches(item, token);
     }
@@ -173,13 +280,37 @@ export function createFilteringFunction(items: RegionalAvailability[]) {
   };
 
   // --- Parent-chain inheritance ---
+  // When a query contains stack tokens, parent-chain inheritance is disabled entirely.
+  // Each row must pass itemMatchesStack on its own merits — the stack filtering already
+  // handles hierarchy (SERVICE matches if it has a matching child RT, PROPERTY matches
+  // if its parent RT matches, CONFIGURATION narrows by property values). Allowing
+  // parent-chain inheritance would override the precise narrowing (e.g., a matched
+  // resource type row would pull in ALL its config children, defeating property narrowing).
+  //
+  // For non-stack queries, parent-chain inheritance works as before: if a parent matches
+  // the query, its children are included.
   let lastQuery: PropertyFilterQuery | null = null;
   const matchedIds = new Set<string>();
+  let hasStackTokens = false;
+
+  /** Check if a query contains any stack tokens (at any nesting depth). */
+  const queryHasStackTokens = (tokenOrGroup: PropertyFilterToken | PropertyFilterTokenGroup): boolean => {
+    if (isTokenGroup(tokenOrGroup)) {
+      return tokenOrGroup.tokens.some(child => queryHasStackTokens(child));
+    }
+    return tokenOrGroup.propertyKey === 'stack';
+  };
 
   return (item: RegionalAvailability, query: PropertyFilterQuery): boolean => {
     if (query !== lastQuery) {
       matchedIds.clear();
       lastQuery = query;
+
+      const rootGroup: PropertyFilterTokenGroup = {
+        operation: query.operation,
+        tokens: query.tokenGroups ?? query.tokens,
+      };
+      hasStackTokens = queryHasStackTokens(rootGroup);
     }
 
     // Build the root token group from the query
@@ -194,11 +325,16 @@ export function createFilteringFunction(items: RegionalAvailability[]) {
       return true;
     }
 
-    // Parent-chain inheritance: include child if an ancestor genuinely matches
-    let current = item.parentId ? byId.get(item.parentId) : undefined;
-    while (current) {
-      if (matchedIds.has(current.id)) return true;
-      current = current.parentId ? byId.get(current.parentId) : undefined;
+    // Parent-chain inheritance: include child if an ancestor genuinely matches.
+    // DISABLED when the query contains stack tokens — stack filtering handles
+    // its own hierarchy via itemMatchesStack, and inheritance would override
+    // the precise property-value narrowing.
+    if (!hasStackTokens) {
+      let current = item.parentId ? byId.get(item.parentId) : undefined;
+      while (current) {
+        if (matchedIds.has(current.id)) return true;
+        current = current.parentId ? byId.get(current.parentId) : undefined;
+      }
     }
 
     return false;
