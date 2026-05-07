@@ -23,7 +23,8 @@
     "dev:setup": "npm run build && ./deployment/dev.sh setup",
     "dev:deploy": "npm run build && ./deployment/dev.sh deploy",
     "dev:teardown": "npm run build && ./deployment/dev.sh teardown",
-    "server": "npm run dev --workspace=source/website"
+    "server": "npm run dev --workspace=source/website",
+    "browse": "bash ./deployment/browse.sh"
   },
   "devDependencies": {
     "@eslint/js": "^9.35.0",
