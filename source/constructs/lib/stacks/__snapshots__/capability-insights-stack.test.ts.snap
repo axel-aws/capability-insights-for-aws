@@ -659,6 +659,28 @@ exports[`CloudFormation template matches snapshot 1`] = `
             },
             "PolicyName": "DynamoDBPolicyTableAccess",
           },
+          {
+            "PolicyDocument": {
+              "Statement": [
+                {
+                  "Action": [
+                    "iam:CreatePolicy",
+                    "iam:CreatePolicyVersion",
+                    "iam:DeletePolicyVersion",
+                    "iam:ListPolicyVersions",
+                    "iam:DeletePolicy",
+                    "iam:GetPolicy",
+                  ],
+                  "Effect": "Allow",
+                  "Resource": {
+                    "Fn::Sub": "arn:\${AWS::Partition}:iam::\${AWS::AccountId}:policy/PolicyEnforcer-*",
+                  },
+                },
+              ],
+              "Version": "2012-10-17",
+            },
+            "PolicyName": "IAMPolicyManagement",
+          },
         ],
         "RoleName": {
           "Fn::Sub": "CapabilityInsightsApiLambdaRole-\${AWS::Region}",
@@ -848,6 +870,35 @@ exports[`CloudFormation template matches snapshot 1`] = `
         ],
       },
       "Type": "AWS::Events::Rule",
+    },
+    "CapabilityInsightsIAMVpcEndpoint": {
+      "Properties": {
+        "PrivateDnsEnabled": true,
+        "SecurityGroupIds": [
+          {
+            "Ref": "CapabilityInsightsApiGwSecurityGroup",
+          },
+        ],
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.\${AWS::Region}.iam",
+        },
+        "SubnetIds": [
+          {
+            "Ref": "BackendSubnetId",
+          },
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "CapabilityInsightsIAMVpcEndpoint",
+          },
+        ],
+        "VpcEndpointType": "Interface",
+        "VpcId": {
+          "Ref": "PrivateVpcId",
+        },
+      },
+      "Type": "AWS::EC2::VPCEndpoint",
     },
     "CapabilityInsightsLambdaVpcEndpoint": {
       "Properties": {

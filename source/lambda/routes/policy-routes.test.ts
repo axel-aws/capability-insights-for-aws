@@ -360,6 +360,7 @@ describe('policy-routes', () => {
 
   describe('DELETE /policies/:policyId (deletePolicyRoute)', () => {
     it('returns 200 when policy is deleted', async () => {
+      mockGetPolicy.mockResolvedValueOnce(mockPolicyConfig);
       mockDeletePolicy.mockResolvedValueOnce(undefined);
 
       const event = makeEvent({

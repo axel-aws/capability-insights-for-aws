@@ -9,6 +9,14 @@ import { validatePolicyConfiguration } from '../services/policy-enforcer/validat
 import { computeAllowList } from '../services/policy-enforcer/allow-list-engine';
 import { generatePolicyDocument } from '../services/policy-enforcer/policy-document-generator';
 import { S3BucketClient } from '../services/s3-client';
+import {
+  IAMClient,
+  CreatePolicyCommand,
+  CreatePolicyVersionCommand,
+  ListPolicyVersionsCommand,
+  DeletePolicyVersionCommand,
+  DeletePolicyCommand,
+} from '@aws-sdk/client-iam';
 import type {
   CreatePolicyRequest,
   ListPoliciesQuery,
@@ -16,6 +24,8 @@ import type {
   PolicyStatus,
 } from '@capability-insights/shared/types/policy-enforcer/policy-configuration';
 import type { ApiService } from '@capability-insights/shared/types/capability/api';
+
+const iamClient = new IAMClient({});
 
 function getStore(): PolicyConfigStore {
   const tableName = getEnv(EnvironmentKey.POLICY_TABLE_NAME);
@@ -215,6 +225,33 @@ export const deletePolicyRoute = async (
 
   try {
     const store = getStore();
+    const policy = await store.getPolicy(policyId);
+    if (!policy) {
+      return {
+        statusCode: StatusCode.NOT_FOUND,
+        headers: corsHeaders,
+        body: JSON.stringify({ error: 'NotFound', message: `Policy ${policyId} not found` }),
+      };
+    }
+
+    // Delete the IAM policy if one was created
+    if (policy.policyArn) {
+      try {
+        // Delete all non-default versions first (required before deleting the policy)
+        const versions = await iamClient.send(new ListPolicyVersionsCommand({ PolicyArn: policy.policyArn }));
+        for (const v of (versions.Versions ?? []).filter(v => !v.IsDefaultVersion)) {
+          await iamClient.send(new DeletePolicyVersionCommand({
+            PolicyArn: policy.policyArn,
+            VersionId: v.VersionId,
+          }));
+        }
+        await iamClient.send(new DeletePolicyCommand({ PolicyArn: policy.policyArn }));
+        logger.info('Deleted IAM policy', { policyId, policyArn: policy.policyArn });
+      } catch (iamError: unknown) {
+        logger.warn('Failed to delete IAM policy (may not exist)', { policyArn: policy.policyArn, error: String(iamError) });
+      }
+    }
+
     await store.deletePolicy(policyId);
     return {
       statusCode: StatusCode.OK,
@@ -277,9 +314,46 @@ export const refreshPolicyRoute = async (
       generationTimestamp: new Date().toISOString(),
     });
 
-    // Update the policy status with refresh results
+    // Create or update the IAM managed policy
+    let policyArn = policy.policyArn;
+    const policyDocument = JSON.stringify(generatedPolicy.documents[0]);
+
+    if (!policyArn) {
+      // Create new IAM policy
+      const createResult = await iamClient.send(new CreatePolicyCommand({
+        PolicyName: `PolicyEnforcer-${policy.policyName.replace(/[^a-zA-Z0-9+=,.@_-]/g, '-')}`,
+        PolicyDocument: policyDocument,
+        Description: `Managed by Policy Enforcer: ${policy.policyName}`,
+      }));
+      policyArn = createResult.Policy?.Arn;
+      logger.info('Created IAM policy', { policyId, policyArn });
+    } else {
+      // Update existing policy by creating a new version
+      // IAM allows max 5 versions — delete oldest non-default if at limit
+      const versions = await iamClient.send(new ListPolicyVersionsCommand({ PolicyArn: policyArn }));
+      const nonDefaultVersions = (versions.Versions ?? [])
+        .filter(v => !v.IsDefaultVersion)
+        .sort((a, b) => (a.CreateDate?.getTime() ?? 0) - (b.CreateDate?.getTime() ?? 0));
+
+      if ((versions.Versions?.length ?? 0) >= 5 && nonDefaultVersions.length > 0) {
+        await iamClient.send(new DeletePolicyVersionCommand({
+          PolicyArn: policyArn,
+          VersionId: nonDefaultVersions[0].VersionId,
+        }));
+      }
+
+      await iamClient.send(new CreatePolicyVersionCommand({
+        PolicyArn: policyArn,
+        PolicyDocument: policyDocument,
+        SetAsDefault: true,
+      }));
+      logger.info('Updated IAM policy version', { policyId, policyArn });
+    }
+
+    // Update the policy config with refresh results and ARN
     await store.updatePolicy(policyId, {
       status: 'active',
+      policyArn,
       lastRefreshTime: new Date().toISOString(),
       lastRefreshOutcome: 'success',
       lastActionCount: allowListResult.actionCount,
@@ -290,6 +364,7 @@ export const refreshPolicyRoute = async (
       headers: corsHeaders,
       body: JSON.stringify({
         message: 'Policy refreshed successfully',
+        policyArn,
         actionCount: allowListResult.actionCount,
         splitRequired: generatedPolicy.splitRequired,
         totalSize: generatedPolicy.totalSize,

@@ -214,6 +214,17 @@ export class CapabilityInsightsStack extends cdk.Stack {
       tags: [{ key: 'Name', value: `${prefix}CloudFormationVpcEndpoint` }],
     });
 
+    // Allows the API Lambda to create/update IAM policies from the private subnet.
+    new ec2.CfnVPCEndpoint(this, `${prefix}IAMVpcEndpoint`, {
+      vpcId: vpcIdParameter.valueAsString,
+      vpcEndpointType: 'Interface',
+      serviceName: cdk.Fn.sub('com.amazonaws.${AWS::Region}.iam'),
+      privateDnsEnabled: true,
+      subnetIds: [privateSubnetIdParameter.valueAsString],
+      securityGroupIds: [apigwSecurityGroup.ref],
+      tags: [{ key: 'Name', value: `${prefix}IAMVpcEndpoint` }],
+    });
+
     const apigw = new api.CfnRestApi(this, apigwName, {
       name: apigwName,
       description: 'Private REST API for Capability Insights',
@@ -539,6 +550,26 @@ export class CapabilityInsightsStack extends cdk.Stack {
                     TableArn: cdk.Fn.getAtt(policyTable.logicalId, 'Arn').toString(),
                   }),
                 ],
+              },
+            ],
+          },
+        },
+        {
+          policyName: 'IAMPolicyManagement',
+          policyDocument: {
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: [
+                  'iam:CreatePolicy',
+                  'iam:CreatePolicyVersion',
+                  'iam:DeletePolicyVersion',
+                  'iam:ListPolicyVersions',
+                  'iam:DeletePolicy',
+                  'iam:GetPolicy',
+                ],
+                Resource: cdk.Fn.sub('arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/PolicyEnforcer-*'),
               },
             ],
           },
