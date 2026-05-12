@@ -1,6 +1,6 @@
 import type { ApiService } from '@capability-insights/shared/types/capability/api';
 import type { PolicyConfiguration } from '@capability-insights/shared/types/policy-enforcer/policy-configuration';
-import { AvailabilityStatus } from '@capability-insights/shared/types/availability/availability-status';
+import { AvailabilityStatus } from '../../../shared/types/availability/availability-status';
 import { toIamAction } from './iam-action-mapping';
 
 export interface AllowListInput {

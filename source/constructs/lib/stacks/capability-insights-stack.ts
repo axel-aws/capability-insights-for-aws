@@ -290,7 +290,7 @@ export class CapabilityInsightsStack extends cdk.Stack {
       functionName: dataFetchLambdaName,
       runtime: 'nodejs24.x',
       role: cdk.Fn.getAtt(dataFetchLambdaRole.logicalId, 'Arn').toString(),
-      handler: 'data-fetch-lambda-main.handler',
+      handler: 'lambda/data-fetch-lambda-main.handler',
       memorySize: 2048,
       timeout: 120,
       code: {
@@ -548,7 +548,7 @@ export class CapabilityInsightsStack extends cdk.Stack {
     const apiLambdaFunction = new lambda.CfnFunction(this, apiLambdaName, {
       functionName: apiLambdaName,
       runtime: 'nodejs24.x',
-      handler: 'api-lambda-main.handler',
+      handler: 'lambda/api-lambda-main.handler',
       role: cdk.Fn.getAtt(apiLambdaRole.logicalId, 'Arn').toString(),
       code: {
         s3Bucket: deploymentAssetsBucketNameParameter.valueAsString,

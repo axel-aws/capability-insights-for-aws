@@ -3,7 +3,7 @@
     "target": "ES2022",
     "module": "commonjs",
     "outDir": "./dist-refresh",
-    "rootDir": ".",
+    "rootDir": "..",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -14,7 +14,8 @@
   "include": [
     "refresh-lambda-main.ts",
     "services/policy-enforcer/**/*.ts",
-    "util/logger.ts"
+    "util/logger.ts",
+    "../shared/**/*.ts"
   ],
   "exclude": [
     "node_modules",

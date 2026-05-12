@@ -7,8 +7,8 @@
     "build": "tsc || true",
     "build:refresh": "tsc -p tsconfig.refresh.json || true",
     "clean": "rm -rf dist dist-refresh",
-    "package": "cd dist && zip -r ../../../deployment/dist/lambda/lambdaAssets.zip .",
-    "package:refresh": "cd dist-refresh && zip -r ../../../deployment/dist/lambda/refreshLambdaAssets.zip .",
+    "package": "cd dist && zip -r ../../../deployment/dist/lambda/lambdaAssets.zip lambda shared",
+    "package:refresh": "cd dist-refresh && zip -r ../../../deployment/dist/lambda/refreshLambdaAssets.zip lambda shared",
     "postbuild": "npm run build:refresh",
     "postpackage": "npm run package:refresh",
     "test": "vitest run"

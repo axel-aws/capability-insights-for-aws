@@ -423,7 +423,7 @@ exports[`CloudFormation template matches snapshot 1`] = `
           },
         },
         "FunctionName": "CapabilityInsightsApiLambda",
-        "Handler": "api-lambda-main.handler",
+        "Handler": "lambda/api-lambda-main.handler",
         "Role": {
           "Fn::GetAtt": [
             "CapabilityInsightsApiLambdaRole",
@@ -734,7 +734,7 @@ exports[`CloudFormation template matches snapshot 1`] = `
           },
         },
         "FunctionName": "CapabilityInsightsDataFetchLambda",
-        "Handler": "data-fetch-lambda-main.handler",
+        "Handler": "lambda/data-fetch-lambda-main.handler",
         "MemorySize": 2048,
         "Role": {
           "Fn::GetAtt": [

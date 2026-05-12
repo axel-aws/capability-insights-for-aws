@@ -285,7 +285,7 @@ export class UsageAnalysisStack extends cdk.Stack {
     const cloudtrailAnalyzerLambda = new lambda.CfnFunction(this, cloudtrailAnalyzerLambdaName, {
       functionName: cloudtrailAnalyzerLambdaName,
       runtime: 'nodejs24.x',
-      handler: 'cloudtrail-analyzer.handler',
+      handler: 'lambda/cloudtrail-analyzer.handler',
       role: cdk.Fn.getAtt(cloudtrailAnalyzerRole.logicalId, 'Arn').toString(),
       code: {
         s3Bucket: deploymentAssetsBucketNameParameter.valueAsString,
