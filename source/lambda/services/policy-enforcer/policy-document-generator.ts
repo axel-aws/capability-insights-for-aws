@@ -58,9 +58,9 @@ function getDocumentSize(document: PolicyDocument): number {
 function generateSid(timestamp: string, partNumber?: number): string {
   const sanitizedTimestamp = timestamp.replace(/[^a-zA-Z0-9]/g, '');
   if (partNumber !== undefined) {
-    return `PolicyEnforcer_${sanitizedTimestamp}_Part${partNumber}`;
+    return `PolicyEnforcer${sanitizedTimestamp}Part${partNumber}`;
   }
-  return `PolicyEnforcer_${sanitizedTimestamp}`;
+  return `PolicyEnforcer${sanitizedTimestamp}`;
 }
 
 /**

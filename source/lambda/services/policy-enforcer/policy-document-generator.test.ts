@@ -179,7 +179,7 @@ describe('generatePolicyDocument', () => {
             Version: '2012-10-17',
             Statement: [
               {
-                Sid: 'PolicyEnforcer_20240115T120000Z',
+                Sid: 'PolicyEnforcer20240115T120000Z',
                 Effect: 'Deny',
                 NotAction: ['ec2:DescribeInstances', 's3:GetObject', 's3:PutObject'],
                 Resource: '*',
@@ -191,7 +191,7 @@ describe('generatePolicyDocument', () => {
           Version: '2012-10-17',
           Statement: [
             {
-              Sid: 'PolicyEnforcer_20240115T120000Z',
+              Sid: 'PolicyEnforcer20240115T120000Z',
               Effect: 'Deny',
               NotAction: ['ec2:DescribeInstances', 's3:GetObject', 's3:PutObject'],
               Resource: '*',
