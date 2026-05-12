@@ -8,6 +8,7 @@ import SideNavigation from '@cloudscape-design/components/side-navigation';
 import {
   APP_NAME,
   PAGE_CAPABILITY_BY_REGION,
+  PAGE_POLICY_ENFORCER,
   PAGE_SETTINGS,
   AWS_CAPABILITY_EXTERNAL,
   AWS_CAPABILITY_EXTERNAL_URL,
@@ -53,6 +54,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             header={{ href: '/', text: APP_NAME }}
             items={[
               { type: 'link', text: PAGE_CAPABILITY_BY_REGION, href: '/' },
+              { type: 'link', text: PAGE_POLICY_ENFORCER, href: '/policy-enforcer' },
               { type: 'link', text: PAGE_SETTINGS, href: '/settings' },
               { type: 'divider' },
               {

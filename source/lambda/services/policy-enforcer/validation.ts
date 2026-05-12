@@ -1,4 +1,4 @@
-import { CreatePolicyRequest } from '../../../shared/types/policy-enforcer/policy-configuration';
+import { CreatePolicyRequest } from '@capability-insights/shared/types/policy-enforcer/policy-configuration';
 
 export interface ValidationResult {
   valid: boolean;

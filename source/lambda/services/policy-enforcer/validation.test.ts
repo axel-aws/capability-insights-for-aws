@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { validateExceptionEntry, validatePolicyConfiguration } from './validation';
-import { CreatePolicyRequest } from '../../../shared/types/policy-enforcer/policy-configuration';
+import { CreatePolicyRequest } from '@capability-insights/shared/types/policy-enforcer/policy-configuration';
 
 /**
  * Unit tests for validation utilities.

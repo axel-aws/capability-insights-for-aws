@@ -4,6 +4,7 @@ node_modules/
 # Build outputs
 dist/
 dist-refresh/
+source/shared/**/*.js
 build/
 deployment/dist/
 

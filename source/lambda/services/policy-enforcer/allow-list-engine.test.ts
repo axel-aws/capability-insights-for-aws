@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { computeAllowList } from './allow-list-engine';
-import { AvailabilityStatus } from '../../../shared/types/availability/availability-status';
-import type { ApiService } from '../../../shared/types/capability/api';
-import type { PolicyConfiguration } from '../../../shared/types/policy-enforcer/policy-configuration';
+import { AvailabilityStatus } from '@capability-insights/shared/types/availability/availability-status';
+import type { ApiService } from '@capability-insights/shared/types/capability/api';
+import type { PolicyConfiguration } from '@capability-insights/shared/types/policy-enforcer/policy-configuration';
 
 /**
  * Unit tests for computeAllowList.

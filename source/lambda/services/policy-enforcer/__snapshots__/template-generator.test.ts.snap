@@ -1,0 +1,1335 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`generateDeploymentTemplate > snapshot test with VPC deployment enabled > generates expected template with VPC deployment 1`] = `
+"{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Policy Enforcer deployment stack. Creates a Lambda function that periodically refreshes an IAM Policy or SCP based on regional capability availability from the Service Catalog API.",
+  "Parameters": {
+    "CatalogApiEndpoint": {
+      "Type": "String",
+      "Description": "The URL of the Catalog API endpoint for fetching regional availability data.",
+      "Default": "https://api.example.com/catalog"
+    },
+    "RefreshIntervalHours": {
+      "Type": "Number",
+      "Description": "How often (in hours) the policy should be refreshed. Valid range: 1-24.",
+      "Default": 12
+    },
+    "PolicyConfigId": {
+      "Type": "String",
+      "Description": "The unique identifier of the policy configuration.",
+      "Default": "policy-config-vpc-456"
+    },
+    "PolicyType": {
+      "Type": "String",
+      "Description": "The type of policy to generate (IAM managed policy or Service Control Policy).",
+      "Default": "IAM",
+      "AllowedValues": [
+        "IAM",
+        "SCP"
+      ]
+    },
+    "VpcDeployment": {
+      "Type": "String",
+      "Description": "Whether to deploy within a VPC with VPC endpoints.",
+      "Default": "true",
+      "AllowedValues": [
+        "true",
+        "false"
+      ]
+    },
+    "VpcId": {
+      "Type": "String",
+      "Description": "The VPC ID for VPC deployment."
+    },
+    "SubnetIds": {
+      "Type": "String",
+      "Description": "Comma-separated list of subnet IDs for the Lambda function."
+    },
+    "SecurityGroupId": {
+      "Type": "String",
+      "Description": "Security group ID for the Lambda function and VPC endpoints."
+    }
+  },
+  "Resources": {
+    "ConfigTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "PolicyEnforcer-Config-\${AWS::StackName}"
+        },
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "policyId",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "policyId",
+            "KeyType": "HASH"
+          }
+        ],
+        "SSESpecification": {
+          "SSEEnabled": true,
+          "SSEType": "KMS"
+        },
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "Tags": [
+          {
+            "Key": "PolicyEnforcer:PolicyConfigId",
+            "Value": {
+              "Ref": "PolicyConfigId"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:PolicyType",
+            "Value": {
+              "Ref": "PolicyType"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:ManagedBy",
+            "Value": "PolicyEnforcer"
+          }
+        ]
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "PolicyEnforcer-LambdaRole-\${AWS::StackName}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "DynamoDBAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:Query"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "ConfigTable",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "CloudWatchMetrics",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudwatch:PutMetricData"
+                  ],
+                  "Resource": "*",
+                  "Condition": {
+                    "StringEquals": {
+                      "cloudwatch:namespace": "PolicyEnforcer"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "CloudWatchLogs",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:\${AWS::Partition}:logs:\${AWS::Region}:\${AWS::AccountId}:log-group:/aws/lambda/*"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "IAMPolicyManagement",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "iam:CreatePolicyVersion",
+                    "iam:DeletePolicyVersion",
+                    "iam:GetPolicy",
+                    "iam:GetPolicyVersion",
+                    "iam:ListPolicyVersions"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "ManagedPolicy",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "VPCAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ec2:CreateNetworkInterface",
+                    "ec2:DescribeNetworkInterfaces",
+                    "ec2:DeleteNetworkInterface"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "PolicyEnforcer:PolicyConfigId",
+            "Value": {
+              "Ref": "PolicyConfigId"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:PolicyType",
+            "Value": {
+              "Ref": "PolicyType"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:ManagedBy",
+            "Value": "PolicyEnforcer"
+          }
+        ]
+      }
+    },
+    "ManagedPolicy": {
+      "Type": "AWS::IAM::ManagedPolicy",
+      "Properties": {
+        "ManagedPolicyName": {
+          "Fn::Sub": "PolicyEnforcer-Policy-\${AWS::StackName}"
+        },
+        "Description": "Managed policy generated by Policy Enforcer. Updated on each refresh cycle.",
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "PolicyEnforcerPlaceholder",
+              "Effect": "Deny",
+              "Action": "none:Placeholder",
+              "Resource": "*"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "PolicyEnforcer:PolicyConfigId",
+            "Value": {
+              "Ref": "PolicyConfigId"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:PolicyType",
+            "Value": {
+              "Ref": "PolicyType"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:ManagedBy",
+            "Value": "PolicyEnforcer"
+          }
+        ]
+      }
+    },
+    "RefreshLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "PolicyEnforcer-Refresh-\${AWS::StackName}"
+        },
+        "Runtime": "nodejs24.x",
+        "Architectures": [
+          "arm64"
+        ],
+        "Handler": "refresh-lambda-main.handler",
+        "MemorySize": 256,
+        "Timeout": 300,
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Environment": {
+          "Variables": {
+            "CONFIG_TABLE_NAME": {
+              "Ref": "ConfigTable"
+            },
+            "CATALOG_API_ENDPOINT": {
+              "Ref": "CatalogApiEndpoint"
+            },
+            "POLICY_CONFIG_ID": {
+              "Ref": "PolicyConfigId"
+            },
+            "POLICY_TYPE": {
+              "Ref": "PolicyType"
+            },
+            "POLICY_ARN": {
+              "Fn::GetAtt": [
+                "ManagedPolicy",
+                "Arn"
+              ]
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "const https = require('https');\\nexports.handler = async function(event) {\\n  console.log('Policy Enforcer Refresh Lambda triggered', JSON.stringify(event));\\n  const configTable = process.env.CONFIG_TABLE_NAME;\\n  const catalogEndpoint = process.env.CATALOG_API_ENDPOINT;\\n  const policyConfigId = process.env.POLICY_CONFIG_ID;\\n  const policyType = process.env.POLICY_TYPE;\\n  const policyArn = process.env.POLICY_ARN;\\n  // Full implementation deployed via code package update\\n  return { success: true, message: 'Placeholder - deploy full package for production use' };\\n};"
+        },
+        "Tags": [
+          {
+            "Key": "PolicyEnforcer:PolicyConfigId",
+            "Value": {
+              "Ref": "PolicyConfigId"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:PolicyType",
+            "Value": {
+              "Ref": "PolicyType"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:ManagedBy",
+            "Value": "PolicyEnforcer"
+          }
+        ],
+        "VpcConfig": {
+          "SubnetIds": {
+            "Fn::Split": [
+              ",",
+              {
+                "Ref": "SubnetIds"
+              }
+            ]
+          },
+          "SecurityGroupIds": [
+            {
+              "Ref": "SecurityGroupId"
+            }
+          ]
+        }
+      },
+      "DependsOn": [
+        "LambdaExecutionRole",
+        "ConfigTable",
+        "ManagedPolicy"
+      ]
+    },
+    "RefreshSchedule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "PolicyEnforcer-Schedule-\${AWS::StackName}"
+        },
+        "Description": "Triggers the Policy Enforcer Refresh Lambda on a periodic schedule.",
+        "ScheduleExpression": {
+          "Fn::Sub": "rate(\${RefreshIntervalHours} hours)"
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Id": "RefreshLambdaTarget",
+            "Arn": {
+              "Fn::GetAtt": [
+                "RefreshLambda",
+                "Arn"
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "PolicyEnforcer:PolicyConfigId",
+            "Value": {
+              "Ref": "PolicyConfigId"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:PolicyType",
+            "Value": {
+              "Ref": "PolicyType"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:ManagedBy",
+            "Value": "PolicyEnforcer"
+          }
+        ]
+      },
+      "DependsOn": "RefreshLambda"
+    },
+    "RefreshSchedulePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "RefreshLambda"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "RefreshSchedule",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "InitialRefreshTriggerRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "InvokeLambda",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "lambda:InvokeFunction"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "RefreshLambda",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:\${AWS::Partition}:logs:\${AWS::Region}:\${AWS::AccountId}:log-group:/aws/lambda/*"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "PolicyEnforcer:PolicyConfigId",
+            "Value": {
+              "Ref": "PolicyConfigId"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:PolicyType",
+            "Value": {
+              "Ref": "PolicyType"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:ManagedBy",
+            "Value": "PolicyEnforcer"
+          }
+        ]
+      }
+    },
+    "InitialRefreshTriggerFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Runtime": "nodejs24.x",
+        "Architectures": [
+          "arm64"
+        ],
+        "Handler": "index.handler",
+        "Timeout": 300,
+        "MemorySize": 128,
+        "Role": {
+          "Fn::GetAtt": [
+            "InitialRefreshTriggerRole",
+            "Arn"
+          ]
+        },
+        "Environment": {
+          "Variables": {
+            "REFRESH_LAMBDA_ARN": {
+              "Fn::GetAtt": [
+                "RefreshLambda",
+                "Arn"
+              ]
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');\\nconst https = require('https');\\nconst url = require('url');\\n\\nexports.handler = async function(event, context) {\\n  console.log('Custom resource event:', JSON.stringify(event));\\n  const responseData = {};\\n  try {\\n    if (event.RequestType === 'Create' || event.RequestType === 'Update') {\\n      const client = new LambdaClient({});\\n      const command = new InvokeCommand({\\n        FunctionName: process.env.REFRESH_LAMBDA_ARN,\\n        InvocationType: 'RequestResponse',\\n      });\\n      const result = await client.send(command);\\n      console.log('Initial refresh result:', JSON.stringify(result));\\n    }\\n    await sendResponse(event, context, 'SUCCESS', responseData);\\n  } catch (error) {\\n    console.error('Initial refresh failed:', error);\\n    await sendResponse(event, context, 'FAILED', { Error: error.message });\\n  }\\n};\\n\\nasync function sendResponse(event, context, status, data) {\\n  const body = JSON.stringify({\\n    Status: status,\\n    Reason: \`See CloudWatch Log Stream: \${context.logStreamName}\`,\\n    PhysicalResourceId: context.logStreamName,\\n    StackId: event.StackId,\\n    RequestId: event.RequestId,\\n    LogicalResourceId: event.LogicalResourceId,\\n    Data: data,\\n  });\\n\\n  const parsedUrl = url.parse(event.ResponseURL);\\n  const options = {\\n    hostname: parsedUrl.hostname,\\n    port: 443,\\n    path: parsedUrl.path,\\n    method: 'PUT',\\n    headers: {\\n      'Content-Type': '',\\n      'Content-Length': body.length,\\n    },\\n  };\\n\\n  return new Promise((resolve, reject) => {\\n    const req = https.request(options, (res) => resolve(res));\\n    req.on('error', (err) => reject(err));\\n    req.write(body);\\n    req.end();\\n  });\\n}"
+        },
+        "Tags": [
+          {
+            "Key": "PolicyEnforcer:PolicyConfigId",
+            "Value": {
+              "Ref": "PolicyConfigId"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:PolicyType",
+            "Value": {
+              "Ref": "PolicyType"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:ManagedBy",
+            "Value": "PolicyEnforcer"
+          }
+        ]
+      },
+      "DependsOn": [
+        "InitialRefreshTriggerRole",
+        "RefreshLambda"
+      ]
+    },
+    "InitialRefreshCustomResource": {
+      "Type": "AWS::CloudFormation::CustomResource",
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "InitialRefreshTriggerFunction",
+            "Arn"
+          ]
+        },
+        "ServiceTimeout": 300
+      },
+      "DependsOn": [
+        "InitialRefreshTriggerFunction",
+        "RefreshLambda",
+        "ConfigTable",
+        "ManagedPolicy"
+      ]
+    },
+    "DynamoDBVpcEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Condition": "IsVpcDeployment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.\${AWS::Region}.dynamodb"
+        },
+        "VpcEndpointType": "Gateway",
+        "RouteTableIds": [],
+        "Tags": [
+          {
+            "Key": "PolicyEnforcer:PolicyConfigId",
+            "Value": {
+              "Ref": "PolicyConfigId"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:PolicyType",
+            "Value": {
+              "Ref": "PolicyType"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:ManagedBy",
+            "Value": "PolicyEnforcer"
+          }
+        ]
+      }
+    },
+    "IAMVpcEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Condition": "IsVpcDeployment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.\${AWS::Region}.iam"
+        },
+        "VpcEndpointType": "Interface",
+        "SubnetIds": {
+          "Fn::Split": [
+            ",",
+            {
+              "Ref": "SubnetIds"
+            }
+          ]
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "SecurityGroupId"
+          }
+        ],
+        "PrivateDnsEnabled": true,
+        "Tags": [
+          {
+            "Key": "PolicyEnforcer:PolicyConfigId",
+            "Value": {
+              "Ref": "PolicyConfigId"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:PolicyType",
+            "Value": {
+              "Ref": "PolicyType"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:ManagedBy",
+            "Value": "PolicyEnforcer"
+          }
+        ]
+      }
+    },
+    "OrganizationsVpcEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Condition": "IsVpcDeployment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.\${AWS::Region}.organizations"
+        },
+        "VpcEndpointType": "Interface",
+        "SubnetIds": {
+          "Fn::Split": [
+            ",",
+            {
+              "Ref": "SubnetIds"
+            }
+          ]
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "SecurityGroupId"
+          }
+        ],
+        "PrivateDnsEnabled": true,
+        "Tags": [
+          {
+            "Key": "PolicyEnforcer:PolicyConfigId",
+            "Value": {
+              "Ref": "PolicyConfigId"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:PolicyType",
+            "Value": {
+              "Ref": "PolicyType"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:ManagedBy",
+            "Value": "PolicyEnforcer"
+          }
+        ]
+      }
+    },
+    "CatalogApiVpcEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Condition": "IsVpcDeployment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.\${AWS::Region}.execute-api"
+        },
+        "VpcEndpointType": "Interface",
+        "SubnetIds": {
+          "Fn::Split": [
+            ",",
+            {
+              "Ref": "SubnetIds"
+            }
+          ]
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "SecurityGroupId"
+          }
+        ],
+        "PrivateDnsEnabled": true,
+        "Tags": [
+          {
+            "Key": "PolicyEnforcer:PolicyConfigId",
+            "Value": {
+              "Ref": "PolicyConfigId"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:PolicyType",
+            "Value": {
+              "Ref": "PolicyType"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:ManagedBy",
+            "Value": "PolicyEnforcer"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "PolicyArn": {
+      "Description": "The ARN of the managed IAM policy generated by Policy Enforcer.",
+      "Value": {
+        "Fn::GetAtt": [
+          "ManagedPolicy",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "\${AWS::StackName}-PolicyArn"
+        }
+      }
+    },
+    "RefreshLambdaArn": {
+      "Description": "The ARN of the Refresh Lambda function.",
+      "Value": {
+        "Fn::GetAtt": [
+          "RefreshLambda",
+          "Arn"
+        ]
+      }
+    },
+    "ConfigTableName": {
+      "Description": "The name of the DynamoDB configuration table.",
+      "Value": {
+        "Ref": "ConfigTable"
+      }
+    },
+    "RefreshScheduleArn": {
+      "Description": "The ARN of the EventBridge refresh schedule rule.",
+      "Value": {
+        "Fn::GetAtt": [
+          "RefreshSchedule",
+          "Arn"
+        ]
+      }
+    }
+  },
+  "Conditions": {
+    "IsVpcDeployment": {
+      "Fn::Equals": [
+        {
+          "Ref": "VpcDeployment"
+        },
+        "true"
+      ]
+    }
+  }
+}"
+`;
+
+exports[`generateDeploymentTemplate > snapshot test with default parameters > generates expected template with default parameters 1`] = `
+"{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Policy Enforcer deployment stack. Creates a Lambda function that periodically refreshes an IAM Policy or SCP based on regional capability availability from the Service Catalog API.",
+  "Parameters": {
+    "CatalogApiEndpoint": {
+      "Type": "String",
+      "Description": "The URL of the Catalog API endpoint for fetching regional availability data.",
+      "Default": "https://api.example.com/catalog"
+    },
+    "RefreshIntervalHours": {
+      "Type": "Number",
+      "Description": "How often (in hours) the policy should be refreshed. Valid range: 1-24.",
+      "Default": 24
+    },
+    "PolicyConfigId": {
+      "Type": "String",
+      "Description": "The unique identifier of the policy configuration.",
+      "Default": "policy-config-123"
+    },
+    "PolicyType": {
+      "Type": "String",
+      "Description": "The type of policy to generate (IAM managed policy or Service Control Policy).",
+      "Default": "IAM",
+      "AllowedValues": [
+        "IAM",
+        "SCP"
+      ]
+    }
+  },
+  "Resources": {
+    "ConfigTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "PolicyEnforcer-Config-\${AWS::StackName}"
+        },
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "policyId",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "policyId",
+            "KeyType": "HASH"
+          }
+        ],
+        "SSESpecification": {
+          "SSEEnabled": true,
+          "SSEType": "KMS"
+        },
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "Tags": [
+          {
+            "Key": "PolicyEnforcer:PolicyConfigId",
+            "Value": {
+              "Ref": "PolicyConfigId"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:PolicyType",
+            "Value": {
+              "Ref": "PolicyType"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:ManagedBy",
+            "Value": "PolicyEnforcer"
+          }
+        ]
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "PolicyEnforcer-LambdaRole-\${AWS::StackName}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "DynamoDBAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:Query"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "ConfigTable",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "CloudWatchMetrics",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudwatch:PutMetricData"
+                  ],
+                  "Resource": "*",
+                  "Condition": {
+                    "StringEquals": {
+                      "cloudwatch:namespace": "PolicyEnforcer"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "CloudWatchLogs",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:\${AWS::Partition}:logs:\${AWS::Region}:\${AWS::AccountId}:log-group:/aws/lambda/*"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "IAMPolicyManagement",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "iam:CreatePolicyVersion",
+                    "iam:DeletePolicyVersion",
+                    "iam:GetPolicy",
+                    "iam:GetPolicyVersion",
+                    "iam:ListPolicyVersions"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "ManagedPolicy",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "PolicyEnforcer:PolicyConfigId",
+            "Value": {
+              "Ref": "PolicyConfigId"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:PolicyType",
+            "Value": {
+              "Ref": "PolicyType"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:ManagedBy",
+            "Value": "PolicyEnforcer"
+          }
+        ]
+      }
+    },
+    "ManagedPolicy": {
+      "Type": "AWS::IAM::ManagedPolicy",
+      "Properties": {
+        "ManagedPolicyName": {
+          "Fn::Sub": "PolicyEnforcer-Policy-\${AWS::StackName}"
+        },
+        "Description": "Managed policy generated by Policy Enforcer. Updated on each refresh cycle.",
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "PolicyEnforcerPlaceholder",
+              "Effect": "Deny",
+              "Action": "none:Placeholder",
+              "Resource": "*"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "PolicyEnforcer:PolicyConfigId",
+            "Value": {
+              "Ref": "PolicyConfigId"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:PolicyType",
+            "Value": {
+              "Ref": "PolicyType"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:ManagedBy",
+            "Value": "PolicyEnforcer"
+          }
+        ]
+      }
+    },
+    "RefreshLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "PolicyEnforcer-Refresh-\${AWS::StackName}"
+        },
+        "Runtime": "nodejs24.x",
+        "Architectures": [
+          "arm64"
+        ],
+        "Handler": "refresh-lambda-main.handler",
+        "MemorySize": 256,
+        "Timeout": 300,
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Environment": {
+          "Variables": {
+            "CONFIG_TABLE_NAME": {
+              "Ref": "ConfigTable"
+            },
+            "CATALOG_API_ENDPOINT": {
+              "Ref": "CatalogApiEndpoint"
+            },
+            "POLICY_CONFIG_ID": {
+              "Ref": "PolicyConfigId"
+            },
+            "POLICY_TYPE": {
+              "Ref": "PolicyType"
+            },
+            "POLICY_ARN": {
+              "Fn::GetAtt": [
+                "ManagedPolicy",
+                "Arn"
+              ]
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "const https = require('https');\\nexports.handler = async function(event) {\\n  console.log('Policy Enforcer Refresh Lambda triggered', JSON.stringify(event));\\n  const configTable = process.env.CONFIG_TABLE_NAME;\\n  const catalogEndpoint = process.env.CATALOG_API_ENDPOINT;\\n  const policyConfigId = process.env.POLICY_CONFIG_ID;\\n  const policyType = process.env.POLICY_TYPE;\\n  const policyArn = process.env.POLICY_ARN;\\n  // Full implementation deployed via code package update\\n  return { success: true, message: 'Placeholder - deploy full package for production use' };\\n};"
+        },
+        "Tags": [
+          {
+            "Key": "PolicyEnforcer:PolicyConfigId",
+            "Value": {
+              "Ref": "PolicyConfigId"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:PolicyType",
+            "Value": {
+              "Ref": "PolicyType"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:ManagedBy",
+            "Value": "PolicyEnforcer"
+          }
+        ]
+      },
+      "DependsOn": [
+        "LambdaExecutionRole",
+        "ConfigTable",
+        "ManagedPolicy"
+      ]
+    },
+    "RefreshSchedule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "PolicyEnforcer-Schedule-\${AWS::StackName}"
+        },
+        "Description": "Triggers the Policy Enforcer Refresh Lambda on a periodic schedule.",
+        "ScheduleExpression": {
+          "Fn::Sub": "rate(\${RefreshIntervalHours} hours)"
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Id": "RefreshLambdaTarget",
+            "Arn": {
+              "Fn::GetAtt": [
+                "RefreshLambda",
+                "Arn"
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "PolicyEnforcer:PolicyConfigId",
+            "Value": {
+              "Ref": "PolicyConfigId"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:PolicyType",
+            "Value": {
+              "Ref": "PolicyType"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:ManagedBy",
+            "Value": "PolicyEnforcer"
+          }
+        ]
+      },
+      "DependsOn": "RefreshLambda"
+    },
+    "RefreshSchedulePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "RefreshLambda"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "RefreshSchedule",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "InitialRefreshTriggerRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "InvokeLambda",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "lambda:InvokeFunction"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "RefreshLambda",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:\${AWS::Partition}:logs:\${AWS::Region}:\${AWS::AccountId}:log-group:/aws/lambda/*"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "PolicyEnforcer:PolicyConfigId",
+            "Value": {
+              "Ref": "PolicyConfigId"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:PolicyType",
+            "Value": {
+              "Ref": "PolicyType"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:ManagedBy",
+            "Value": "PolicyEnforcer"
+          }
+        ]
+      }
+    },
+    "InitialRefreshTriggerFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Runtime": "nodejs24.x",
+        "Architectures": [
+          "arm64"
+        ],
+        "Handler": "index.handler",
+        "Timeout": 300,
+        "MemorySize": 128,
+        "Role": {
+          "Fn::GetAtt": [
+            "InitialRefreshTriggerRole",
+            "Arn"
+          ]
+        },
+        "Environment": {
+          "Variables": {
+            "REFRESH_LAMBDA_ARN": {
+              "Fn::GetAtt": [
+                "RefreshLambda",
+                "Arn"
+              ]
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');\\nconst https = require('https');\\nconst url = require('url');\\n\\nexports.handler = async function(event, context) {\\n  console.log('Custom resource event:', JSON.stringify(event));\\n  const responseData = {};\\n  try {\\n    if (event.RequestType === 'Create' || event.RequestType === 'Update') {\\n      const client = new LambdaClient({});\\n      const command = new InvokeCommand({\\n        FunctionName: process.env.REFRESH_LAMBDA_ARN,\\n        InvocationType: 'RequestResponse',\\n      });\\n      const result = await client.send(command);\\n      console.log('Initial refresh result:', JSON.stringify(result));\\n    }\\n    await sendResponse(event, context, 'SUCCESS', responseData);\\n  } catch (error) {\\n    console.error('Initial refresh failed:', error);\\n    await sendResponse(event, context, 'FAILED', { Error: error.message });\\n  }\\n};\\n\\nasync function sendResponse(event, context, status, data) {\\n  const body = JSON.stringify({\\n    Status: status,\\n    Reason: \`See CloudWatch Log Stream: \${context.logStreamName}\`,\\n    PhysicalResourceId: context.logStreamName,\\n    StackId: event.StackId,\\n    RequestId: event.RequestId,\\n    LogicalResourceId: event.LogicalResourceId,\\n    Data: data,\\n  });\\n\\n  const parsedUrl = url.parse(event.ResponseURL);\\n  const options = {\\n    hostname: parsedUrl.hostname,\\n    port: 443,\\n    path: parsedUrl.path,\\n    method: 'PUT',\\n    headers: {\\n      'Content-Type': '',\\n      'Content-Length': body.length,\\n    },\\n  };\\n\\n  return new Promise((resolve, reject) => {\\n    const req = https.request(options, (res) => resolve(res));\\n    req.on('error', (err) => reject(err));\\n    req.write(body);\\n    req.end();\\n  });\\n}"
+        },
+        "Tags": [
+          {
+            "Key": "PolicyEnforcer:PolicyConfigId",
+            "Value": {
+              "Ref": "PolicyConfigId"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:PolicyType",
+            "Value": {
+              "Ref": "PolicyType"
+            }
+          },
+          {
+            "Key": "PolicyEnforcer:ManagedBy",
+            "Value": "PolicyEnforcer"
+          }
+        ]
+      },
+      "DependsOn": [
+        "InitialRefreshTriggerRole",
+        "RefreshLambda"
+      ]
+    },
+    "InitialRefreshCustomResource": {
+      "Type": "AWS::CloudFormation::CustomResource",
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "InitialRefreshTriggerFunction",
+            "Arn"
+          ]
+        },
+        "ServiceTimeout": 300
+      },
+      "DependsOn": [
+        "InitialRefreshTriggerFunction",
+        "RefreshLambda",
+        "ConfigTable",
+        "ManagedPolicy"
+      ]
+    }
+  },
+  "Outputs": {
+    "PolicyArn": {
+      "Description": "The ARN of the managed IAM policy generated by Policy Enforcer.",
+      "Value": {
+        "Fn::GetAtt": [
+          "ManagedPolicy",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "\${AWS::StackName}-PolicyArn"
+        }
+      }
+    },
+    "RefreshLambdaArn": {
+      "Description": "The ARN of the Refresh Lambda function.",
+      "Value": {
+        "Fn::GetAtt": [
+          "RefreshLambda",
+          "Arn"
+        ]
+      }
+    },
+    "ConfigTableName": {
+      "Description": "The name of the DynamoDB configuration table.",
+      "Value": {
+        "Ref": "ConfigTable"
+      }
+    },
+    "RefreshScheduleArn": {
+      "Description": "The ARN of the EventBridge refresh schedule rule.",
+      "Value": {
+        "Fn::GetAtt": [
+          "RefreshSchedule",
+          "Arn"
+        ]
+      }
+    }
+  }
+}"
+`;

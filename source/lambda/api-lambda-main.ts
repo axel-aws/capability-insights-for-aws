@@ -10,6 +10,16 @@ import { listStacksRoute } from './routes/list-stacks-route';
 import { stackResourcesRoute } from './routes/stack-resources-route';
 import { handleAnalyze } from './routes/analyze-route';
 import { getUsedCapabilities } from './routes/usage-route';
+import {
+  createPolicyRoute,
+  listPoliciesRoute,
+  getPolicyRoute,
+  updatePolicyRoute,
+  deletePolicyRoute,
+  refreshPolicyRoute,
+  previewPolicyRoute,
+  templatePolicyRoute,
+} from './routes/policy-routes';
 
 // --- Exact match routes ---
 const routes: Map<string, RouteHandler> = new Map();
@@ -57,6 +67,17 @@ registerRoute(HttpMethod.GET, '/analysis', handleAnalyze);
 registerRoute(HttpMethod.GET, '/capabilities', getUsedCapabilities);
 
 registerParameterizedRoute(HttpMethod.GET, '/stacks/:stackName/resources', stackResourcesRoute);
+
+// Policy Enforcer routes
+registerRoute(HttpMethod.POST, '/policies', createPolicyRoute);
+registerRoute(HttpMethod.GET, '/policies', listPoliciesRoute);
+
+registerParameterizedRoute(HttpMethod.GET, '/policies/:policyId', getPolicyRoute);
+registerParameterizedRoute(HttpMethod.PUT, '/policies/:policyId', updatePolicyRoute);
+registerParameterizedRoute(HttpMethod.DELETE, '/policies/:policyId', deletePolicyRoute);
+registerParameterizedRoute(HttpMethod.POST, '/policies/:policyId/refresh', refreshPolicyRoute);
+registerParameterizedRoute(HttpMethod.GET, '/policies/:policyId/preview', previewPolicyRoute);
+registerParameterizedRoute(HttpMethod.GET, '/policies/:policyId/template', templatePolicyRoute);
 
 // --- Main handler ---
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
