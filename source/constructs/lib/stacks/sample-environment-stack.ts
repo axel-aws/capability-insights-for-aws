@@ -113,6 +113,16 @@ export class CapabilityInsightsSampleEnvironmentStack extends cdk.Stack {
       tags: [{ key: 'Name', value: vpcS3EndpointName }],
     });
 
+    // VPC Gateway Endpoint to DynamoDB - so Lambda can reach DynamoDB from private subnet
+    const vpcDynamoDbEndpointName = `${vpcName}DynamoDbEndpoint`;
+    new ec2.CfnVPCEndpoint(this, vpcDynamoDbEndpointName, {
+      vpcId: this.vpc.attrVpcId,
+      vpcEndpointType: 'Gateway',
+      serviceName: cdk.Fn.sub('com.amazonaws.${AWS::Region}.dynamodb'),
+      routeTableIds: [publicRouteTable.attrRouteTableId, privateRouteTable.attrRouteTableId],
+      tags: [{ key: 'Name', value: vpcDynamoDbEndpointName }],
+    });
+
     const keypairName = props?.ec2KeyPair;
 
     // IAM role that the instances in VPC will use
