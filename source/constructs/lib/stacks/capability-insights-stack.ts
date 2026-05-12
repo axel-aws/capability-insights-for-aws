@@ -558,6 +558,7 @@ export class CapabilityInsightsStack extends cdk.Stack {
         securityGroupIds: [apiLambdaSecurityGroup.ref],
         subnetIds: [privateSubnetIdParameter.valueAsString],
       },
+      memorySize: 512,
       timeout: 60, // 1 min
       environment: {
         variables: {
