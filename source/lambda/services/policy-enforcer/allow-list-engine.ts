@@ -34,7 +34,7 @@ export function computeAllowList(input: AllowListInput): AllowListResult {
 
   for (const service of catalogData) {
     for (const operation of service.apis) {
-      const iamAction = toIamAction(service.sdkServiceName, operation.apiAction);
+      const iamAction = toIamAction(service.sdkServiceName, operation.apiAction, operation.homepage);
 
       let included: boolean;
 
