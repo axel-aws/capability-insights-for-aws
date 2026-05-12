@@ -9,14 +9,7 @@ import { validatePolicyConfiguration } from '../services/policy-enforcer/validat
 import { computeAllowList } from '../services/policy-enforcer/allow-list-engine';
 import { generatePolicyDocument } from '../services/policy-enforcer/policy-document-generator';
 import { S3BucketClient } from '../services/s3-client';
-import {
-  IAMClient,
-  CreatePolicyCommand,
-  CreatePolicyVersionCommand,
-  ListPolicyVersionsCommand,
-  DeletePolicyVersionCommand,
-  DeletePolicyCommand,
-} from '@aws-sdk/client-iam';
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import type {
   CreatePolicyRequest,
   ListPoliciesQuery,
@@ -25,7 +18,17 @@ import type {
 } from '@capability-insights/shared/types/policy-enforcer/policy-configuration';
 import type { ApiService } from '@capability-insights/shared/types/capability/api';
 
-const iamClient = new IAMClient({});
+const lambdaClient = new LambdaClient({});
+
+async function invokeIAMHelper(payload: Record<string, unknown>): Promise<{ success: boolean; policyArn?: string; error?: string }> {
+  const helperName = getEnv(EnvironmentKey.IAM_HELPER_LAMBDA_NAME);
+  const result = await lambdaClient.send(new InvokeCommand({
+    FunctionName: helperName,
+    Payload: Buffer.from(JSON.stringify(payload)),
+  }));
+  const response = JSON.parse(Buffer.from(result.Payload ?? '{}').toString());
+  return response;
+}
 
 function getStore(): PolicyConfigStore {
   const tableName = getEnv(EnvironmentKey.POLICY_TABLE_NAME);
@@ -237,18 +240,14 @@ export const deletePolicyRoute = async (
     // Delete the IAM policy if one was created
     if (policy.policyArn) {
       try {
-        // Delete all non-default versions first (required before deleting the policy)
-        const versions = await iamClient.send(new ListPolicyVersionsCommand({ PolicyArn: policy.policyArn }));
-        for (const v of (versions.Versions ?? []).filter(v => !v.IsDefaultVersion)) {
-          await iamClient.send(new DeletePolicyVersionCommand({
-            PolicyArn: policy.policyArn,
-            VersionId: v.VersionId,
-          }));
+        const iamResult = await invokeIAMHelper({ action: 'delete', policyArn: policy.policyArn });
+        if (iamResult.success) {
+          logger.info('Deleted IAM policy', { policyId, policyArn: policy.policyArn });
+        } else {
+          logger.warn('Failed to delete IAM policy', { policyArn: policy.policyArn, error: iamResult.error });
         }
-        await iamClient.send(new DeletePolicyCommand({ PolicyArn: policy.policyArn }));
-        logger.info('Deleted IAM policy', { policyId, policyArn: policy.policyArn });
       } catch (iamError: unknown) {
-        logger.warn('Failed to delete IAM policy (may not exist)', { policyArn: policy.policyArn, error: String(iamError) });
+        logger.warn('Failed to invoke IAM helper for delete', { policyArn: policy.policyArn, error: String(iamError) });
       }
     }
 
@@ -314,39 +313,35 @@ export const refreshPolicyRoute = async (
       generationTimestamp: new Date().toISOString(),
     });
 
-    // Create or update the IAM managed policy
+    // Create or update the IAM managed policy via helper Lambda (runs outside VPC)
     let policyArn = policy.policyArn;
     const policyDocument = JSON.stringify(generatedPolicy.documents[0]);
 
     if (!policyArn) {
       // Create new IAM policy
-      const createResult = await iamClient.send(new CreatePolicyCommand({
-        PolicyName: `PolicyEnforcer-${policy.policyName.replace(/[^a-zA-Z0-9+=,.@_-]/g, '-')}`,
-        PolicyDocument: policyDocument,
-        Description: `Managed by Policy Enforcer: ${policy.policyName}`,
-      }));
-      policyArn = createResult.Policy?.Arn;
+      const iamResult = await invokeIAMHelper({
+        action: 'create',
+        policyName: `PolicyEnforcer-${policy.policyName.replace(/[^a-zA-Z0-9+=,.@_-]/g, '-')}`,
+        policyDocument,
+        description: `Managed by Policy Enforcer: ${policy.policyName}`,
+      });
+      if (!iamResult.success) {
+        logger.error('Failed to create IAM policy', { policyId, error: iamResult.error });
+        return ErrorResponse.internalServerError(`Failed to create IAM policy: ${iamResult.error}`);
+      }
+      policyArn = iamResult.policyArn;
       logger.info('Created IAM policy', { policyId, policyArn });
     } else {
-      // Update existing policy by creating a new version
-      // IAM allows max 5 versions — delete oldest non-default if at limit
-      const versions = await iamClient.send(new ListPolicyVersionsCommand({ PolicyArn: policyArn }));
-      const nonDefaultVersions = (versions.Versions ?? [])
-        .filter(v => !v.IsDefaultVersion)
-        .sort((a, b) => (a.CreateDate?.getTime() ?? 0) - (b.CreateDate?.getTime() ?? 0));
-
-      if ((versions.Versions?.length ?? 0) >= 5 && nonDefaultVersions.length > 0) {
-        await iamClient.send(new DeletePolicyVersionCommand({
-          PolicyArn: policyArn,
-          VersionId: nonDefaultVersions[0].VersionId,
-        }));
+      // Update existing policy with new version
+      const iamResult = await invokeIAMHelper({
+        action: 'update',
+        policyArn,
+        policyDocument,
+      });
+      if (!iamResult.success) {
+        logger.error('Failed to update IAM policy', { policyId, policyArn, error: iamResult.error });
+        return ErrorResponse.internalServerError(`Failed to update IAM policy: ${iamResult.error}`);
       }
-
-      await iamClient.send(new CreatePolicyVersionCommand({
-        PolicyArn: policyArn,
-        PolicyDocument: policyDocument,
-        SetAsDefault: true,
-      }));
       logger.info('Updated IAM policy version', { policyId, policyArn });
     }
 

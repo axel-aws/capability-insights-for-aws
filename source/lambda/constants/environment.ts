@@ -11,6 +11,7 @@ export const EnvironmentKey = {
   CLOUDFORMATION_ANALYZER_LAMBDA_NAME: 'CLOUDFORMATION_ANALYZER_LAMBDA_NAME',
   ANALYSIS_STATE_MACHINE_ARN: 'ANALYSIS_STATE_MACHINE_ARN',
   POLICY_TABLE_NAME: 'POLICY_TABLE_NAME',
+  IAM_HELPER_LAMBDA_NAME: 'IAM_HELPER_LAMBDA_NAME',
 } as const;
 
 export type EnvironmentKey = (typeof EnvironmentKey)[keyof typeof EnvironmentKey];

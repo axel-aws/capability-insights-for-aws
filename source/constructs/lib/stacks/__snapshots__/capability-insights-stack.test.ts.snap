@@ -414,6 +414,7 @@ exports[`CloudFormation template matches snapshot 1`] = `
               "Ref": "CloudTrailAnalyzerLambdaName",
             },
             "DATA_FETCH_LAMBDA_NAME": "CapabilityInsightsDataFetchLambda",
+            "IAM_HELPER_LAMBDA_NAME": "CapabilityInsightsIAMPolicyHelper",
             "POLICY_TABLE_NAME": {
               "Ref": "CapabilityInsightsPolicyConfiguration",
             },
@@ -521,14 +522,24 @@ exports[`CloudFormation template matches snapshot 1`] = `
                 {
                   "Action": "lambda:InvokeFunction",
                   "Effect": "Allow",
-                  "Resource": {
-                    "Fn::Sub": [
-                      "arn:\${AWS::Partition}:lambda:\${AWS::Region}:\${AWS::AccountId}:function:\${FunctionName}",
-                      {
-                        "FunctionName": "CapabilityInsightsDataFetchLambda",
-                      },
-                    ],
-                  },
+                  "Resource": [
+                    {
+                      "Fn::Sub": [
+                        "arn:\${AWS::Partition}:lambda:\${AWS::Region}:\${AWS::AccountId}:function:\${FunctionName}",
+                        {
+                          "FunctionName": "CapabilityInsightsDataFetchLambda",
+                        },
+                      ],
+                    },
+                    {
+                      "Fn::Sub": [
+                        "arn:\${AWS::Partition}:lambda:\${AWS::Region}:\${AWS::AccountId}:function:\${FunctionName}",
+                        {
+                          "FunctionName": "CapabilityInsightsIAMPolicyHelper",
+                        },
+                      ],
+                    },
+                  ],
                 },
               ],
               "Version": "2012-10-17",
@@ -658,28 +669,6 @@ exports[`CloudFormation template matches snapshot 1`] = `
               "Version": "2012-10-17",
             },
             "PolicyName": "DynamoDBPolicyTableAccess",
-          },
-          {
-            "PolicyDocument": {
-              "Statement": [
-                {
-                  "Action": [
-                    "iam:CreatePolicy",
-                    "iam:CreatePolicyVersion",
-                    "iam:DeletePolicyVersion",
-                    "iam:ListPolicyVersions",
-                    "iam:DeletePolicy",
-                    "iam:GetPolicy",
-                  ],
-                  "Effect": "Allow",
-                  "Resource": {
-                    "Fn::Sub": "arn:\${AWS::Partition}:iam::\${AWS::AccountId}:policy/PolicyEnforcer-*",
-                  },
-                },
-              ],
-              "Version": "2012-10-17",
-            },
-            "PolicyName": "IAMPolicyManagement",
           },
         ],
         "RoleName": {
@@ -871,34 +860,76 @@ exports[`CloudFormation template matches snapshot 1`] = `
       },
       "Type": "AWS::Events::Rule",
     },
-    "CapabilityInsightsIAMVpcEndpoint": {
+    "CapabilityInsightsIAMPolicyHelper": {
       "Properties": {
-        "PrivateDnsEnabled": true,
-        "SecurityGroupIds": [
-          {
-            "Ref": "CapabilityInsightsApiGwSecurityGroup",
+        "Code": {
+          "S3Bucket": {
+            "Ref": "DeploymentAssetsBucketName",
           },
-        ],
-        "ServiceName": {
-          "Fn::Sub": "com.amazonaws.\${AWS::Region}.iam",
+          "S3Key": {
+            "Ref": "DeploymentAssetsBucketApiLambdaFunctionCodeZipPath",
+          },
         },
-        "SubnetIds": [
+        "FunctionName": "CapabilityInsightsIAMPolicyHelper",
+        "Handler": "lambda/iam-policy-helper.handler",
+        "MemorySize": 128,
+        "Role": {
+          "Fn::GetAtt": [
+            "CapabilityInsightsIAMPolicyHelperRole",
+            "Arn",
+          ],
+        },
+        "Runtime": "nodejs24.x",
+        "Timeout": 30,
+      },
+      "Type": "AWS::Lambda::Function",
+    },
+    "CapabilityInsightsIAMPolicyHelperRole": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+        ],
+        "Policies": [
           {
-            "Ref": "BackendSubnetId",
+            "PolicyDocument": {
+              "Statement": [
+                {
+                  "Action": [
+                    "iam:CreatePolicy",
+                    "iam:CreatePolicyVersion",
+                    "iam:DeletePolicyVersion",
+                    "iam:ListPolicyVersions",
+                    "iam:DeletePolicy",
+                    "iam:GetPolicy",
+                  ],
+                  "Effect": "Allow",
+                  "Resource": {
+                    "Fn::Sub": "arn:\${AWS::Partition}:iam::\${AWS::AccountId}:policy/PolicyEnforcer-*",
+                  },
+                },
+              ],
+              "Version": "2012-10-17",
+            },
+            "PolicyName": "IAMPolicyManagement",
           },
         ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": "CapabilityInsightsIAMVpcEndpoint",
-          },
-        ],
-        "VpcEndpointType": "Interface",
-        "VpcId": {
-          "Ref": "PrivateVpcId",
+        "RoleName": {
+          "Fn::Sub": "CapabilityInsightsIAMPolicyHelperRole-\${AWS::Region}",
         },
       },
-      "Type": "AWS::EC2::VPCEndpoint",
+      "Type": "AWS::IAM::Role",
     },
     "CapabilityInsightsLambdaVpcEndpoint": {
       "Properties": {

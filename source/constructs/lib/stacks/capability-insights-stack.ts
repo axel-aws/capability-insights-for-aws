@@ -214,17 +214,6 @@ export class CapabilityInsightsStack extends cdk.Stack {
       tags: [{ key: 'Name', value: `${prefix}CloudFormationVpcEndpoint` }],
     });
 
-    // Allows the API Lambda to create/update IAM policies from the private subnet.
-    new ec2.CfnVPCEndpoint(this, `${prefix}IAMVpcEndpoint`, {
-      vpcId: vpcIdParameter.valueAsString,
-      vpcEndpointType: 'Interface',
-      serviceName: cdk.Fn.sub('com.amazonaws.${AWS::Region}.iam'),
-      privateDnsEnabled: true,
-      subnetIds: [privateSubnetIdParameter.valueAsString],
-      securityGroupIds: [apigwSecurityGroup.ref],
-      tags: [{ key: 'Name', value: `${prefix}IAMVpcEndpoint` }],
-    });
-
     const apigw = new api.CfnRestApi(this, apigwName, {
       name: apigwName,
       description: 'Private REST API for Capability Insights',
@@ -403,6 +392,52 @@ export class CapabilityInsightsStack extends cdk.Stack {
     });
     policyTable.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
+    // IAM Policy Helper Lambda — runs outside VPC to reach global IAM endpoint
+    const iamHelperLambdaName = `${prefix}IAMPolicyHelper`;
+    const iamHelperRoleName = `${prefix}IAMPolicyHelperRole`;
+    const iamHelperRole = new iam.CfnRole(this, iamHelperRoleName, {
+      roleName: cdk.Fn.sub(`${iamHelperRoleName}-\${AWS::Region}`),
+      assumeRolePolicyDocument: {
+        Version: '2012-10-17',
+        Statement: [{ Effect: 'Allow', Principal: { Service: 'lambda.amazonaws.com' }, Action: 'sts:AssumeRole' }],
+      },
+      managedPolicyArns: ['arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'],
+      policies: [
+        {
+          policyName: 'IAMPolicyManagement',
+          policyDocument: {
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: [
+                  'iam:CreatePolicy',
+                  'iam:CreatePolicyVersion',
+                  'iam:DeletePolicyVersion',
+                  'iam:ListPolicyVersions',
+                  'iam:DeletePolicy',
+                  'iam:GetPolicy',
+                ],
+                Resource: cdk.Fn.sub('arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/PolicyEnforcer-*'),
+              },
+            ],
+          },
+        },
+      ],
+    });
+    new lambda.CfnFunction(this, iamHelperLambdaName, {
+      functionName: iamHelperLambdaName,
+      runtime: 'nodejs24.x',
+      handler: 'lambda/iam-policy-helper.handler',
+      role: cdk.Fn.getAtt(iamHelperRole.logicalId, 'Arn').toString(),
+      code: {
+        s3Bucket: deploymentAssetsBucketNameParameter.valueAsString,
+        s3Key: deploymentAssetsBucketApiLambdaFunctionCodeZipPathParameter.valueAsString,
+      },
+      memorySize: 128,
+      timeout: 30,
+    });
+
     // API Lambda
     const apiLambdaName = `${prefix}ApiLambda`;
     const apiLambdaSecurityGroup = new ec2.CfnSecurityGroup(this, `${prefix}ApiLambdaSecurityGroup`, {
@@ -459,10 +494,16 @@ export class CapabilityInsightsStack extends cdk.Stack {
               {
                 Effect: 'Allow',
                 Action: 'lambda:InvokeFunction',
-                Resource: cdk.Fn.sub(
-                  'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${FunctionName}',
-                  { FunctionName: dataFetchLambdaName },
-                ),
+                Resource: [
+                  cdk.Fn.sub(
+                    'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${FunctionName}',
+                    { FunctionName: dataFetchLambdaName },
+                  ),
+                  cdk.Fn.sub(
+                    'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${FunctionName}',
+                    { FunctionName: iamHelperLambdaName },
+                  ),
+                ],
               },
             ],
           },
@@ -554,26 +595,6 @@ export class CapabilityInsightsStack extends cdk.Stack {
             ],
           },
         },
-        {
-          policyName: 'IAMPolicyManagement',
-          policyDocument: {
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Effect: 'Allow',
-                Action: [
-                  'iam:CreatePolicy',
-                  'iam:CreatePolicyVersion',
-                  'iam:DeletePolicyVersion',
-                  'iam:ListPolicyVersions',
-                  'iam:DeletePolicy',
-                  'iam:GetPolicy',
-                ],
-                Resource: cdk.Fn.sub('arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/PolicyEnforcer-*'),
-              },
-            ],
-          },
-        },
       ],
     });
     const apiLambdaFunction = new lambda.CfnFunction(this, apiLambdaName, {
@@ -598,6 +619,7 @@ export class CapabilityInsightsStack extends cdk.Stack {
           CLOUDTRAIL_ANALYZER_LAMBDA_NAME: cloudTrailAnalyzerLambdaNameParameter.valueAsString,
           ANALYSIS_STATE_MACHINE_ARN: analysisStateMachineArnParameter.valueAsString,
           POLICY_TABLE_NAME: cdk.Fn.ref(policyTable.logicalId),
+          IAM_HELPER_LAMBDA_NAME: iamHelperLambdaName,
         },
       },
     });
