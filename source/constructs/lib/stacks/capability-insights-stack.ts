@@ -1,5 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import * as api from 'aws-cdk-lib/aws-apigateway';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -323,6 +324,74 @@ export class CapabilityInsightsStack extends cdk.Stack {
       sourceArn: cdk.Fn.getAtt(dataFetchLambdaScheduleRule.logicalId, 'Arn').toString(),
     });
 
+    // Policy Configuration DynamoDB Table
+    const policyTableName = `${prefix}PolicyConfiguration`;
+    const policyTable = new dynamodb.CfnTable(this, policyTableName, {
+      tableName: cdk.Fn.sub(`${policyTableName}-\${AWS::Region}`),
+      billingMode: 'PAY_PER_REQUEST',
+      sseSpecification: {
+        sseEnabled: true,
+      },
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: true,
+      },
+      keySchema: [
+        {
+          attributeName: 'policyId',
+          keyType: 'HASH',
+        },
+      ],
+      attributeDefinitions: [
+        {
+          attributeName: 'policyId',
+          attributeType: 'S',
+        },
+        {
+          attributeName: 'policyName',
+          attributeType: 'S',
+        },
+        {
+          attributeName: 'accountId',
+          attributeType: 'S',
+        },
+        {
+          attributeName: 'createdAt',
+          attributeType: 'S',
+        },
+      ],
+      globalSecondaryIndexes: [
+        {
+          indexName: 'PolicyNameIndex',
+          keySchema: [
+            {
+              attributeName: 'policyName',
+              keyType: 'HASH',
+            },
+          ],
+          projection: {
+            projectionType: 'ALL',
+          },
+        },
+        {
+          indexName: 'AccountIdIndex',
+          keySchema: [
+            {
+              attributeName: 'accountId',
+              keyType: 'HASH',
+            },
+            {
+              attributeName: 'createdAt',
+              keyType: 'RANGE',
+            },
+          ],
+          projection: {
+            projectionType: 'ALL',
+          },
+        },
+      ],
+    });
+    policyTable.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+
     // API Lambda
     const apiLambdaName = `${prefix}ApiLambda`;
     const apiLambdaSecurityGroup = new ec2.CfnSecurityGroup(this, `${prefix}ApiLambdaSecurityGroup`, {
@@ -449,6 +518,31 @@ export class CapabilityInsightsStack extends cdk.Stack {
             ],
           },
         },
+        {
+          policyName: 'DynamoDBPolicyTableAccess',
+          policyDocument: {
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: [
+                  'dynamodb:GetItem',
+                  'dynamodb:PutItem',
+                  'dynamodb:UpdateItem',
+                  'dynamodb:DeleteItem',
+                  'dynamodb:Query',
+                  'dynamodb:Scan',
+                ],
+                Resource: [
+                  cdk.Fn.getAtt(policyTable.logicalId, 'Arn').toString(),
+                  cdk.Fn.sub('${TableArn}/index/*', {
+                    TableArn: cdk.Fn.getAtt(policyTable.logicalId, 'Arn').toString(),
+                  }),
+                ],
+              },
+            ],
+          },
+        },
       ],
     });
     const apiLambdaFunction = new lambda.CfnFunction(this, apiLambdaName, {
@@ -471,6 +565,7 @@ export class CapabilityInsightsStack extends cdk.Stack {
           DATA_FETCH_LAMBDA_NAME: dataFetchLambdaName,
           CLOUDTRAIL_ANALYZER_LAMBDA_NAME: cloudTrailAnalyzerLambdaNameParameter.valueAsString,
           ANALYSIS_STATE_MACHINE_ARN: analysisStateMachineArnParameter.valueAsString,
+          POLICY_TABLE_NAME: cdk.Fn.ref(policyTable.logicalId),
         },
       },
     });

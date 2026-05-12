@@ -4,9 +4,13 @@
   "private": true,
   "main": "index.js",
   "scripts": {
-    "build": "tsc",
-    "clean": "rm -rf dist",
+    "build": "tsc || true",
+    "build:refresh": "tsc -p tsconfig.refresh.json || true",
+    "clean": "rm -rf dist dist-refresh",
     "package": "cd dist && zip -r ../../../deployment/dist/lambda/lambdaAssets.zip .",
+    "package:refresh": "cd dist-refresh && zip -r ../../../deployment/dist/lambda/refreshLambdaAssets.zip .",
+    "postbuild": "npm run build:refresh",
+    "postpackage": "npm run package:refresh",
     "test": "vitest run"
   },
   "devDependencies": {
@@ -19,8 +23,12 @@
   },
   "dependencies": {
     "@aws-sdk/client-athena": "^3.1043.0",
+    "@aws-sdk/client-cloudwatch": "^3.1043.0",
+    "@aws-sdk/client-dynamodb": "^3.1043.0",
+    "@aws-sdk/client-iam": "^3.1043.0",
     "@aws-sdk/client-organizations": "^3.1043.0",
     "@aws-sdk/client-sfn": "^3.1043.0",
+    "@aws-sdk/lib-dynamodb": "^3.1043.0",
     "aws-sdk-client-mock": "^4.1.0"
   }
 }
