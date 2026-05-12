@@ -313,42 +313,56 @@ export const refreshPolicyRoute = async (
       generationTimestamp: new Date().toISOString(),
     });
 
-    // Create or update the IAM managed policy via helper Lambda (runs outside VPC)
-    let policyArn = policy.policyArn;
-    const policyDocument = JSON.stringify(generatedPolicy.documents[0]);
+    // Create or update IAM managed policies via helper Lambda (runs outside VPC)
+    // If the allow-list is too large for a single policy, it gets split into multiple documents
+    const policyBaseName = `PolicyEnforcer-${policy.policyName.replace(/[^a-zA-Z0-9+=,.@_-]/g, '-')}`;
+    const allArns: string[] = [];
+    const existingArns = [policy.policyArn, ...(policy.additionalPolicyArns ?? [])].filter(Boolean) as string[];
 
-    if (!policyArn) {
-      // Create new IAM policy
-      const iamResult = await invokeIAMHelper({
-        action: 'create',
-        policyName: `PolicyEnforcer-${policy.policyName.replace(/[^a-zA-Z0-9+=,.@_-]/g, '-')}`,
-        policyDocument,
-        description: `Managed by Policy Enforcer: ${policy.policyName}`,
-      });
-      if (!iamResult.success) {
-        logger.error('Failed to create IAM policy', { policyId, error: iamResult.error });
-        return ErrorResponse.internalServerError(`Failed to create IAM policy: ${iamResult.error}`);
+    for (let i = 0; i < generatedPolicy.documents.length; i++) {
+      const doc = JSON.stringify(generatedPolicy.documents[i]);
+      const suffix = generatedPolicy.documents.length > 1 ? `-Part${i + 1}` : '';
+      const policyName = `${policyBaseName}${suffix}`;
+      const existingArn = existingArns[i];
+
+      if (!existingArn) {
+        // Create new IAM policy
+        const iamResult = await invokeIAMHelper({
+          action: 'create',
+          policyName,
+          policyDocument: doc,
+          description: `Managed by Policy Enforcer: ${policy.policyName}${suffix}`,
+        });
+        if (!iamResult.success) {
+          logger.error('Failed to create IAM policy', { policyId, part: i + 1, error: iamResult.error });
+          return ErrorResponse.internalServerError(`Failed to create IAM policy part ${i + 1}: ${iamResult.error}`);
+        }
+        allArns.push(iamResult.policyArn!);
+        logger.info('Created IAM policy', { policyId, part: i + 1, policyArn: iamResult.policyArn });
+      } else {
+        // Update existing policy with new version
+        const iamResult = await invokeIAMHelper({
+          action: 'update',
+          policyArn: existingArn,
+          policyDocument: doc,
+        });
+        if (!iamResult.success) {
+          logger.error('Failed to update IAM policy', { policyId, part: i + 1, policyArn: existingArn, error: iamResult.error });
+          return ErrorResponse.internalServerError(`Failed to update IAM policy part ${i + 1}: ${iamResult.error}`);
+        }
+        allArns.push(existingArn);
+        logger.info('Updated IAM policy version', { policyId, part: i + 1, policyArn: existingArn });
       }
-      policyArn = iamResult.policyArn;
-      logger.info('Created IAM policy', { policyId, policyArn });
-    } else {
-      // Update existing policy with new version
-      const iamResult = await invokeIAMHelper({
-        action: 'update',
-        policyArn,
-        policyDocument,
-      });
-      if (!iamResult.success) {
-        logger.error('Failed to update IAM policy', { policyId, policyArn, error: iamResult.error });
-        return ErrorResponse.internalServerError(`Failed to update IAM policy: ${iamResult.error}`);
-      }
-      logger.info('Updated IAM policy version', { policyId, policyArn });
     }
 
-    // Update the policy config with refresh results and ARN
+    const policyArn = allArns[0];
+    const additionalPolicyArns = allArns.slice(1);
+
+    // Update the policy config with refresh results and ARNs
     await store.updatePolicy(policyId, {
       status: 'active',
       policyArn,
+      additionalPolicyArns: additionalPolicyArns.length > 0 ? additionalPolicyArns : undefined,
       lastRefreshTime: new Date().toISOString(),
       lastRefreshOutcome: 'success',
       lastActionCount: allowListResult.actionCount,
@@ -360,6 +374,7 @@ export const refreshPolicyRoute = async (
       body: JSON.stringify({
         message: 'Policy refreshed successfully',
         policyArn,
+        additionalPolicyArns: additionalPolicyArns.length > 0 ? additionalPolicyArns : undefined,
         actionCount: allowListResult.actionCount,
         splitRequired: generatedPolicy.splitRequired,
         totalSize: generatedPolicy.totalSize,
