@@ -307,8 +307,8 @@ export const refreshPolicyRoute = async (
 
     const allowListResult = computeAllowList({ catalogData, configuration: policy });
     const generatedPolicy = generatePolicyDocument({
-      allowList: allowListResult.actions,
-      policyType: policy.policyType,
+      catalogData,
+      configuration: policy,
       policyName: policy.policyName,
       generationTimestamp: new Date().toISOString(),
     });
@@ -422,8 +422,8 @@ export const previewPolicyRoute = async (
 
     const allowListResult = computeAllowList({ catalogData, configuration: policy });
     const generatedPolicy = generatePolicyDocument({
-      allowList: allowListResult.actions,
-      policyType: policy.policyType,
+      catalogData,
+      configuration: policy,
       policyName: policy.policyName,
       generationTimestamp: new Date().toISOString(),
     });

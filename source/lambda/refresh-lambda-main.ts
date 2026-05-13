@@ -281,8 +281,8 @@ export async function handler(): Promise<RefreshResult> {
 
   // Step 4: Generate policy document
   const generatedPolicy = generatePolicyDocument({
-    allowList: allowListResult.actions,
-    policyType: POLICY_TYPE,
+    catalogData,
+    configuration,
     policyName: configuration.policyName,
     generationTimestamp: new Date().toISOString(),
   });
