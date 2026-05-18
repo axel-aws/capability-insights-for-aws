@@ -216,11 +216,11 @@ export function itemMatchesPlan(
 ): boolean {
   switch (item.regionalAvailabilityType) {
     case RegionalAvailabilityType.SERVICE: {
-      // Services tab: match service name against capabilitySet.serviceNames
+      // CFN tab: match service name segment against capabilitySet.serviceNames
       return capabilitySet.serviceNames.includes(item.name);
     }
     case RegionalAvailabilityType.FEATURE: {
-      // Services tab: match if parent service name is in serviceNames
+      // CFN tab: match if parent service name is in serviceNames
       const parent = item.parentId ? byId.get(item.parentId) : undefined;
       if (!parent) return false;
       return capabilitySet.serviceNames.includes(parent.name);
