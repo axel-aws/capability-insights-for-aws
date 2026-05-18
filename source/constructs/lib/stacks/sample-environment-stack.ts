@@ -108,6 +108,14 @@ export class CapabilityInsightsSampleEnvironmentStack extends cdk.Stack {
               'arn:${AWS::Partition}:s3:::capability-insights-website-${AWS::AccountId}-${AWS::Region}/*',
             ),
           },
+          {
+            Effect: 'Allow',
+            Principal: '*',
+            Action: ['s3:PutObject', 's3:DeleteObject'],
+            Resource: cdk.Fn.sub(
+              'arn:${AWS::Partition}:s3:::capability-insights-website-${AWS::AccountId}-${AWS::Region}/data/plans/*',
+            ),
+          },
         ],
       },
       tags: [{ key: 'Name', value: vpcS3EndpointName }],

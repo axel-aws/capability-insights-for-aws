@@ -348,6 +348,17 @@ exports[`CloudFormation template matches snapshot 1`] = `
                 "Fn::Sub": "arn:\${AWS::Partition}:s3:::capability-insights-website-\${AWS::AccountId}-\${AWS::Region}/*",
               },
             },
+            {
+              "Action": [
+                "s3:PutObject",
+                "s3:DeleteObject",
+              ],
+              "Effect": "Allow",
+              "Principal": "*",
+              "Resource": {
+                "Fn::Sub": "arn:\${AWS::Partition}:s3:::capability-insights-website-\${AWS::AccountId}-\${AWS::Region}/data/plans/*",
+              },
+            },
           ],
           "Version": "2012-10-17",
         },
