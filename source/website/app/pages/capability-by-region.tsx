@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import ContentLayout from '@cloudscape-design/components/content-layout';
 import Header from '@cloudscape-design/components/header';
 import SpaceBetween from '@cloudscape-design/components/space-between';
@@ -45,12 +46,23 @@ export function meta() {
 }
 
 export default function CapabilityByRegion() {
+  const [searchParams] = useSearchParams();
   const [regions, setRegions] = useState<Region[]>([]);
   const [productRows, setProductRows] = useState<ProductAvailability[]>([]);
   const [apiRows, setApiRows] = useState<ApiAvailability[]>([]);
   const [cfnRows, setCfnRows] = useState<CfnAvailability[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncMetadata, setSyncMetadata] = useState<SyncMetadata | null>(null);
+
+  // Build initial PropertyFilter query from URL search params (e.g., ?plan=MyPlan)
+  const initialPlanQuery = useMemo(() => {
+    const planName = searchParams.get('plan');
+    if (!planName) return undefined;
+    return {
+      tokens: [{ propertyKey: 'plan', operator: '=', value: planName }],
+      operation: 'and' as const,
+    };
+  }, [searchParams]);
 
   useEffect(() => {
     async function load() {
@@ -356,6 +368,7 @@ export default function CapabilityByRegion() {
                   )}
                   loading={loading}
                   includePlanProperty
+                  initialQuery={initialPlanQuery}
                 />
               ),
             },
@@ -403,6 +416,7 @@ export default function CapabilityByRegion() {
                       )}
                       loading={loading}
                       includePlanProperty
+                      initialQuery={initialPlanQuery}
                     />
                   ) : (
                     <AvailabilityTable
@@ -510,6 +524,7 @@ export default function CapabilityByRegion() {
                     loading={loading}
                     includeStackProperty
                     includePlanProperty
+                    initialQuery={initialPlanQuery}
                   />
                 </SpaceBetween>
               ),

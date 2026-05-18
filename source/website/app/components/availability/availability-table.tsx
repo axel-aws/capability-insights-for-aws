@@ -38,6 +38,8 @@ interface AvailabilityTableProps<T extends RegionalAvailability> {
   includeStackProperty?: boolean;
   /** Whether to include the Plan filtering property. */
   includePlanProperty?: boolean;
+  /** Optional initial PropertyFilter query to pre-populate the filter on mount. */
+  initialQuery?: PropertyFilterQuery;
   /** Optional custom cell renderer for availability (region) columns. */
   availabilityCell?: (row: T, regionCode: string) => React.ReactNode;
   /**
@@ -58,6 +60,7 @@ export default function AvailabilityTable<T extends RegionalAvailability>({
   loading = false,
   includeStackProperty = false,
   includePlanProperty = false,
+  initialQuery,
   availabilityCell,
   customFilteringFunction,
 }: AvailabilityTableProps<T>) {
@@ -228,6 +231,7 @@ export default function AvailabilityTable<T extends RegionalAvailability>({
       filteringProperties,
       filteringFunction,
       noMatch: ' ',
+      ...(initialQuery ? { defaultQuery: initialQuery } : {}),
     },
     ...(hasNesting && {
       expandableRows: {
