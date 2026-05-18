@@ -124,3 +124,27 @@ export function parseResourceGoFile(content: string): string[] {
 
   return Array.from(operations).sort();
 }
+
+/**
+ * Extract the AWS SDK service name from a Go file's import statements.
+ *
+ * Looks for import paths matching:
+ *   "github.com/aws/aws-sdk-go-v2/service/{serviceName}"
+ *   "github.com/aws/aws-sdk-go/service/{serviceName}"
+ *   "github.com/aws/aws-sdk-go-v2/service/{serviceName}/types"
+ *
+ * Returns the service name segment (e.g., "codedeploy", "s3", "ecs")
+ * or null if no SDK import is found.
+ */
+const SDK_IMPORT_REGEX = /github\.com\/aws\/aws-sdk-go(?:-v2)?\/service\/([a-z0-9]+)/g;
+
+export function extractSdkServiceName(content: string): string | null {
+  if (!content) return null;
+
+  SDK_IMPORT_REGEX.lastIndex = 0;
+  const match = SDK_IMPORT_REGEX.exec(content);
+  if (match) {
+    return match[1];
+  }
+  return null;
+}

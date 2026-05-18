@@ -3,7 +3,7 @@ import { parseAwsccSchemaContent } from './awscc-parser';
 import { fetchFilesConcurrently } from './concurrent-fetcher';
 import { assembleOverlayData, writeOverlayToS3 } from './mapping-writer';
 import { parseServicePackageGen } from './classic-service-package-parser';
-import { parseResourceGoFile } from './classic-resource-parser';
+import { parseResourceGoFile, extractSdkServiceName } from './classic-resource-parser';
 import { assembleClassicApiMapping, type ResourceApiMapping } from './classic-api-mapping-assembler';
 import { writeClassicApiMappingToS3 } from './classic-api-mapping-writer';
 import type { AwsccMapping, ClassicAwsMapping } from '../../shared/types/terraform-overlay';
@@ -344,9 +344,14 @@ async function fetchAndWriteClassicApiMapping(client: GitHubClient, bucketName: 
     if (!matchedTypeName) continue; // File doesn't contain a known factory function
     if (apiOperations.length === 0) continue; // No API operations found
 
+    // Use the SDK service name from the Go import path (e.g., "codedeploy")
+    // instead of the package directory name (e.g., "deploy")
+    const sdkServiceFromImport = extractSdkServiceName(content);
+    const effectiveServiceName = sdkServiceFromImport ?? serviceName;
+
     const mapping: ResourceApiMapping = {
       terraformType: matchedTypeName,
-      sdkService: serviceName,
+      sdkService: effectiveServiceName,
       apiOperations,
     };
 
