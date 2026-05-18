@@ -1,0 +1,782 @@
+{
+  "Metadata": {
+    "HighCastleBlueprintID#3c5b7308-d575-48bd-bd28-bce1ff16a0d9": "23.0.0",
+    "HighCastleDeploymentType": "Pipelines"
+  },
+  "Parameters": {
+    "PackagingAggregateId": {
+      "Type": "String",
+      "Default": "default_aggregate_id",
+      "Description": "Aggregate Id that can be used to reference resources from different transformations"
+    },
+    "PackagingTransformId": {
+      "Type": "String",
+      "Default": "default_aggregate_id_transform",
+      "Description": "Deployment Id is used to figure out artifact locations in S3 and ECR"
+    },
+    "PackagingS3KeyPrefix": {
+      "Type": "String",
+      "Default": "local_development_resources",
+      "Description": "Deployment Id is used to figure out artifact locations in S3 and ECR"
+    },
+    "AmazonPipelinesRollbackFlag": {
+      "Type": "String",
+      "Default": "false",
+      "Description": "When a rollback deployment is triggered in Pipelines, the system will override the AmazonPipelinesRollbackFlag with a value of true"
+    }
+  },
+  "Conditions": {
+    "IsRollback": {
+      "Fn::Equals": [
+        {
+          "Ref": "AmazonPipelinesRollbackFlag"
+        },
+        "true"
+      ]
+    }
+  },
+  "Resources": {
+    "RedshiftServerlessServiceRole38CE7B00": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:",
+                      {
+                        "Ref": "AWS::Partition"
+                      },
+                      ":iam::346600912712:root"
+                    ]
+                  ]
+                }
+              }
+            },
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "redshift.amazonaws.com",
+                  "redshift-serverless.amazonaws.com"
+                ]
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "Description": "Role assumed by DaaS Dev Account for redshift serverless",
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition"
+                },
+                ":iam::aws:policy/AmazonRedshiftFullAccess"
+              ]
+            ]
+          },
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition"
+                },
+                ":iam::aws:policy/AmazonS3FullAccess"
+              ]
+            ]
+          },
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition"
+                },
+                ":iam::aws:policy/AmazonRedshiftDataFullAccess"
+              ]
+            ]
+          },
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition"
+                },
+                ":iam::aws:policy/SecretsManagerReadWrite"
+              ]
+            ]
+          },
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition"
+                },
+                ":iam::aws:policy/AmazonRedshiftAllCommandsFullAccess"
+              ]
+            ]
+          },
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition"
+                },
+                ":iam::aws:policy/AWSLakeFormationDataAdmin"
+              ]
+            ]
+          },
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition"
+                },
+                ":iam::aws:policy/AWSGlueConsoleFullAccess"
+              ]
+            ]
+          }
+        ],
+        "RoleName": "RedshiftServerlessServiceRole",
+        "Tags": [
+          {
+            "Key": "HighCastleBlueprintID-3c5b7308-d575-48bd-bd28-bce1ff16a0d9",
+            "Value": "23.0.0"
+          },
+          {
+            "Key": "HighCastleDeploymentType",
+            "Value": "Pipelines"
+          }
+        ]
+      },
+      "Metadata": {
+        "aws:cdk:path": "RedshiftServerless/RedshiftServerlessServiceRole/Resource"
+      }
+    },
+    "SSMRedshiftServerlessRoleArnD17B8C38": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Type": "String",
+        "Value": {
+          "Fn::GetAtt": [
+            "RedshiftServerlessServiceRole38CE7B00",
+            "Arn"
+          ]
+        },
+        "AllowedPattern": ".*",
+        "Description": "This is the Arn for the Redshift Serverless service Role.",
+        "Name": "/RedshiftServerless/Role/Arn",
+        "Tier": "Advanced"
+      },
+      "Metadata": {
+        "aws:cdk:path": "RedshiftServerless/SSMRedshiftServerlessRoleArn/Resource"
+      }
+    },
+    "RedshiftDataHandler1BD233D4": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "KeyPolicy": {
+          "Statement": [
+            {
+              "Action": "kms:*",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:",
+                      {
+                        "Ref": "AWS::Partition"
+                      },
+                      ":iam::346600912712:root"
+                    ]
+                  ]
+                }
+              },
+              "Resource": "*"
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "EnableKeyRotation": true,
+        "Tags": [
+          {
+            "Key": "HighCastleBlueprintID-3c5b7308-d575-48bd-bd28-bce1ff16a0d9",
+            "Value": "23.0.0"
+          },
+          {
+            "Key": "HighCastleDeploymentType",
+            "Value": "Pipelines"
+          }
+        ]
+      },
+      "UpdateReplacePolicy": "Retain",
+      "DeletionPolicy": "Retain",
+      "Metadata": {
+        "aws:cdk:path": "RedshiftServerless/RedshiftDataHandler/Resource"
+      }
+    },
+    "RedshiftDataHandlerAliasBCA27455": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": "alias/RedshiftDataHandler",
+        "TargetKeyId": {
+          "Fn::GetAtt": [
+            "RedshiftDataHandler1BD233D4",
+            "Arn"
+          ]
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "RedshiftServerless/RedshiftDataHandler/Alias/Resource"
+      }
+    },
+    "SSMRedshiftServerlessKmsKeyArn7A46B049": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Type": "String",
+        "Value": {
+          "Fn::GetAtt": [
+            "RedshiftDataHandler1BD233D4",
+            "Arn"
+          ]
+        },
+        "AllowedPattern": ".*",
+        "Description": "This is the KMS Key used to encrypt and decrypt data for Redshift Serverless",
+        "Name": "/Kms/RedshiftServerlessDataHandler/Arn",
+        "Tier": "Advanced"
+      },
+      "Metadata": {
+        "aws:cdk:path": "RedshiftServerless/SSMRedshiftServerlessKmsKeyArn/Resource"
+      }
+    },
+    "RedshiftServerlessSecurityGroup47F26F9E": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for Redshift Serverless vpc traffic",
+        "SecurityGroupEgress": [
+          {
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic by default",
+            "IpProtocol": "-1"
+          }
+        ],
+        "SecurityGroupIngress": [
+          {
+            "CidrIp": {
+              "Fn::ImportValue": "Networking:ExportsOutputFnGetAttVPCB9E5F0B4CidrBlock723DF8C0"
+            },
+            "Description": "Local VPC Access",
+            "FromPort": 5439,
+            "IpProtocol": "tcp",
+            "ToPort": 5439
+          },
+          {
+            "CidrIp": "10.17.0.0/24",
+            "Description": "amazonBi",
+            "FromPort": 5439,
+            "IpProtocol": "tcp",
+            "ToPort": 5439
+          }
+        ],
+        "VpcId": {
+          "Fn::ImportValue": "Networking:ExportsOutputRefVPCB9E5F0B4BD23A326"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "RedshiftServerless/RedshiftServerlessSecurityGroup/Resource"
+      }
+    },
+    "RedshiftServerlessPrivateSubnet1Subnet2849F796": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Fn::ImportValue": "Networking:ExportsOutputRefVPCB9E5F0B4BD23A326"
+        },
+        "AvailabilityZone": "us-east-1a",
+        "CidrBlock": "10.0.200.0/27",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "HighCastleBlueprintID-3c5b7308-d575-48bd-bd28-bce1ff16a0d9",
+            "Value": "23.0.0"
+          },
+          {
+            "Key": "HighCastleDeploymentType",
+            "Value": "Pipelines"
+          },
+          {
+            "Key": "Name",
+            "Value": "RedshiftServerless/RedshiftServerlessPrivateSubnet1"
+          }
+        ]
+      },
+      "Metadata": {
+        "aws:cdk:path": "RedshiftServerless/RedshiftServerlessPrivateSubnet1/Subnet"
+      }
+    },
+    "RedshiftServerlessPrivateSubnet1RouteTableB404D8B1": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Fn::ImportValue": "Networking:ExportsOutputRefVPCB9E5F0B4BD23A326"
+        },
+        "Tags": [
+          {
+            "Key": "HighCastleBlueprintID-3c5b7308-d575-48bd-bd28-bce1ff16a0d9",
+            "Value": "23.0.0"
+          },
+          {
+            "Key": "HighCastleDeploymentType",
+            "Value": "Pipelines"
+          },
+          {
+            "Key": "Name",
+            "Value": "RedshiftServerless/RedshiftServerlessPrivateSubnet1"
+          }
+        ]
+      },
+      "Metadata": {
+        "aws:cdk:path": "RedshiftServerless/RedshiftServerlessPrivateSubnet1/RouteTable"
+      }
+    },
+    "RedshiftServerlessPrivateSubnet1RouteTableAssociationE403D22F": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "RedshiftServerlessPrivateSubnet1RouteTableB404D8B1"
+        },
+        "SubnetId": {
+          "Ref": "RedshiftServerlessPrivateSubnet1Subnet2849F796"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "RedshiftServerless/RedshiftServerlessPrivateSubnet1/RouteTableAssociation"
+      }
+    },
+    "RedshiftServerlessPrivateSubnet1amazonBi0810859D": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "RedshiftServerlessPrivateSubnet1RouteTableB404D8B1"
+        },
+        "DestinationCidrBlock": "10.17.0.0/16",
+        "VpcPeeringConnectionId": "pcx-04bb13a0efb0c85c0"
+      },
+      "Metadata": {
+        "aws:cdk:path": "RedshiftServerless/RedshiftServerlessPrivateSubnet1/amazonBi"
+      }
+    },
+    "RedshiftServerlessPrivateSubnet2Subnet6CE81B98": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Fn::ImportValue": "Networking:ExportsOutputRefVPCB9E5F0B4BD23A326"
+        },
+        "AvailabilityZone": "us-east-1b",
+        "CidrBlock": "10.0.201.0/27",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "HighCastleBlueprintID-3c5b7308-d575-48bd-bd28-bce1ff16a0d9",
+            "Value": "23.0.0"
+          },
+          {
+            "Key": "HighCastleDeploymentType",
+            "Value": "Pipelines"
+          },
+          {
+            "Key": "Name",
+            "Value": "RedshiftServerless/RedshiftServerlessPrivateSubnet2"
+          }
+        ]
+      },
+      "Metadata": {
+        "aws:cdk:path": "RedshiftServerless/RedshiftServerlessPrivateSubnet2/Subnet"
+      }
+    },
+    "RedshiftServerlessPrivateSubnet2RouteTable72AE534D": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Fn::ImportValue": "Networking:ExportsOutputRefVPCB9E5F0B4BD23A326"
+        },
+        "Tags": [
+          {
+            "Key": "HighCastleBlueprintID-3c5b7308-d575-48bd-bd28-bce1ff16a0d9",
+            "Value": "23.0.0"
+          },
+          {
+            "Key": "HighCastleDeploymentType",
+            "Value": "Pipelines"
+          },
+          {
+            "Key": "Name",
+            "Value": "RedshiftServerless/RedshiftServerlessPrivateSubnet2"
+          }
+        ]
+      },
+      "Metadata": {
+        "aws:cdk:path": "RedshiftServerless/RedshiftServerlessPrivateSubnet2/RouteTable"
+      }
+    },
+    "RedshiftServerlessPrivateSubnet2RouteTableAssociation08843E65": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "RedshiftServerlessPrivateSubnet2RouteTable72AE534D"
+        },
+        "SubnetId": {
+          "Ref": "RedshiftServerlessPrivateSubnet2Subnet6CE81B98"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "RedshiftServerless/RedshiftServerlessPrivateSubnet2/RouteTableAssociation"
+      }
+    },
+    "RedshiftServerlessPrivateSubnet2amazonBi5E5E0B5F": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "RedshiftServerlessPrivateSubnet2RouteTable72AE534D"
+        },
+        "DestinationCidrBlock": "10.17.0.0/16",
+        "VpcPeeringConnectionId": "pcx-04bb13a0efb0c85c0"
+      },
+      "Metadata": {
+        "aws:cdk:path": "RedshiftServerless/RedshiftServerlessPrivateSubnet2/amazonBi"
+      }
+    },
+    "RedshiftServerlessPrivateSubnet3Subnet327B9EC2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Fn::ImportValue": "Networking:ExportsOutputRefVPCB9E5F0B4BD23A326"
+        },
+        "AvailabilityZone": "us-east-1c",
+        "CidrBlock": "10.0.202.0/27",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "HighCastleBlueprintID-3c5b7308-d575-48bd-bd28-bce1ff16a0d9",
+            "Value": "23.0.0"
+          },
+          {
+            "Key": "HighCastleDeploymentType",
+            "Value": "Pipelines"
+          },
+          {
+            "Key": "Name",
+            "Value": "RedshiftServerless/RedshiftServerlessPrivateSubnet3"
+          }
+        ]
+      },
+      "Metadata": {
+        "aws:cdk:path": "RedshiftServerless/RedshiftServerlessPrivateSubnet3/Subnet"
+      }
+    },
+    "RedshiftServerlessPrivateSubnet3RouteTableC6C1A10C": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Fn::ImportValue": "Networking:ExportsOutputRefVPCB9E5F0B4BD23A326"
+        },
+        "Tags": [
+          {
+            "Key": "HighCastleBlueprintID-3c5b7308-d575-48bd-bd28-bce1ff16a0d9",
+            "Value": "23.0.0"
+          },
+          {
+            "Key": "HighCastleDeploymentType",
+            "Value": "Pipelines"
+          },
+          {
+            "Key": "Name",
+            "Value": "RedshiftServerless/RedshiftServerlessPrivateSubnet3"
+          }
+        ]
+      },
+      "Metadata": {
+        "aws:cdk:path": "RedshiftServerless/RedshiftServerlessPrivateSubnet3/RouteTable"
+      }
+    },
+    "RedshiftServerlessPrivateSubnet3RouteTableAssociationB6186CEB": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "RedshiftServerlessPrivateSubnet3RouteTableC6C1A10C"
+        },
+        "SubnetId": {
+          "Ref": "RedshiftServerlessPrivateSubnet3Subnet327B9EC2"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "RedshiftServerless/RedshiftServerlessPrivateSubnet3/RouteTableAssociation"
+      }
+    },
+    "RedshiftServerlessPrivateSubnet3amazonBi2E3583A6": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "RedshiftServerlessPrivateSubnet3RouteTableC6C1A10C"
+        },
+        "DestinationCidrBlock": "10.17.0.0/16",
+        "VpcPeeringConnectionId": "pcx-04bb13a0efb0c85c0"
+      },
+      "Metadata": {
+        "aws:cdk:path": "RedshiftServerless/RedshiftServerlessPrivateSubnet3/amazonBi"
+      }
+    },
+    "RedshiftServerlessSecretB7CB31D1": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Description": "Credentials for Redshift Serverless Database",
+        "GenerateSecretString": {
+          "ExcludeCharacters": " %+~`#$&*()|[]{}:;<>?!'/@\"\\",
+          "GenerateStringKey": "password",
+          "PasswordLength": 30,
+          "SecretStringTemplate": "{\"username\":\"ninechains_admin\",\"host\":\"ninechains-redshift-workgroup.346600912712.us-east-1.redshift-serverless.amazonaws.com\",\"port\":5439,\"dbname\":\"ninechains\",\"engine\":\"redshift\"}"
+        },
+        "Name": "RedshiftServerless"
+      },
+      "UpdateReplacePolicy": "Delete",
+      "DeletionPolicy": "Delete",
+      "Metadata": {
+        "aws:cdk:path": "RedshiftServerless/RedshiftServerlessSecret/Resource"
+      }
+    },
+    "SSMRedshiftServerlessSecretArnA6423E91": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Type": "String",
+        "Value": {
+          "Ref": "RedshiftServerlessSecretB7CB31D1"
+        },
+        "AllowedPattern": ".*",
+        "Description": "This is the Arn of the Redshift Serverless Secret.",
+        "Name": "/RedshiftServerless/Secret/Arn",
+        "Tier": "Advanced"
+      },
+      "Metadata": {
+        "aws:cdk:path": "RedshiftServerless/SSMRedshiftServerlessSecretArn/Resource"
+      }
+    },
+    "ninechainsredshift": {
+      "Type": "AWS::RedshiftServerless::Namespace",
+      "Properties": {
+        "NamespaceName": "ninechains-redshift",
+        "AdminUsername": {
+          "Fn::Join": [
+            "",
+            [
+              "{{resolve:secretsmanager:",
+              {
+                "Ref": "RedshiftServerlessSecretB7CB31D1"
+              },
+              ":SecretString:username::}}"
+            ]
+          ]
+        },
+        "AdminUserPassword": {
+          "Fn::Join": [
+            "",
+            [
+              "{{resolve:secretsmanager:",
+              {
+                "Ref": "RedshiftServerlessSecretB7CB31D1"
+              },
+              ":SecretString:password::}}"
+            ]
+          ]
+        },
+        "DbName": "ninechains",
+        "DefaultIamRoleArn": {
+          "Fn::GetAtt": [
+            "RedshiftServerlessServiceRole38CE7B00",
+            "Arn"
+          ]
+        },
+        "IamRoles": [
+          {
+            "Fn::GetAtt": [
+              "RedshiftServerlessServiceRole38CE7B00",
+              "Arn"
+            ]
+          }
+        ],
+        "KmsKeyId": {
+          "Ref": "RedshiftDataHandler1BD233D4"
+        },
+        "LogExports": [
+          "userlog",
+          "connectionlog",
+          "useractivitylog"
+        ]
+      },
+      "DependsOn": [
+        "RedshiftServerlessServiceRole38CE7B00"
+      ],
+      "Metadata": {
+        "aws:cdk:path": "RedshiftServerless/ninechains-redshift"
+      }
+    },
+    "ninechainsredshiftworkgroup": {
+      "Type": "AWS::RedshiftServerless::Workgroup",
+      "Properties": {
+        "WorkgroupName": "ninechains-redshift-workgroup",
+        "BaseCapacity": 32,
+        "EnhancedVpcRouting": false,
+        "NamespaceName": "ninechains-redshift",
+        "PubliclyAccessible": false,
+        "SecurityGroupIds": [
+          {
+            "Fn::GetAtt": [
+              "RedshiftServerlessSecurityGroup47F26F9E",
+              "GroupId"
+            ]
+          }
+        ],
+        "SubnetIds": [
+          {
+            "Ref": "RedshiftServerlessPrivateSubnet1Subnet2849F796"
+          },
+          {
+            "Ref": "RedshiftServerlessPrivateSubnet2Subnet6CE81B98"
+          },
+          {
+            "Ref": "RedshiftServerlessPrivateSubnet3Subnet327B9EC2"
+          }
+        ]
+      },
+      "DependsOn": [
+        "ninechainsredshift"
+      ],
+      "Metadata": {
+        "aws:cdk:path": "RedshiftServerless/ninechains-redshift-workgroup"
+      }
+    },
+    "GlueRedshiftServerlessConnection": {
+      "Type": "AWS::Glue::Connection",
+      "Properties": {
+        "CatalogId": "346600912712",
+        "ConnectionInput": {
+          "ConnectionProperties": {
+            "JDBC_CONNECTION_URL": "jdbc:redshift://ninechains-redshift-workgroup.346600912712.us-east-1.redshift-serverless.amazonaws.com:5439/ninechains",
+            "SECRET_ID": {
+              "Ref": "RedshiftServerlessSecretB7CB31D1"
+            },
+            "JDBC_ENFORCE_SSL": false
+          },
+          "ConnectionType": "JDBC",
+          "Description": "Glue connection to 1 subnet of the redshift serverless workgroup.",
+          "Name": "GlueRedshiftServerlessConnection",
+          "PhysicalConnectionRequirements": {
+            "AvailabilityZone": {
+              "Fn::Select": [
+                0,
+                {
+                  "Fn::GetAZs": ""
+                }
+              ]
+            },
+            "SecurityGroupIdList": [
+              {
+                "Fn::GetAtt": [
+                  "RedshiftServerlessSecurityGroup47F26F9E",
+                  "GroupId"
+                ]
+              }
+            ],
+            "SubnetId": {
+              "Fn::ImportValue": "Networking:ExportsOutputRefVPCPrivateSubnet1Subnet8BCA10E01F79A1B7"
+            }
+          }
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "RedshiftServerless/GlueRedshiftServerlessConnection"
+      }
+    },
+    "SSMRedshiftServerlessGlueConnectionArnF8039FCE": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Type": "String",
+        "Value": {
+          "Fn::Join": [
+            "",
+            [
+              "arn:",
+              {
+                "Ref": "AWS::Partition"
+              },
+              ":glue:us-east-1:346600912712:connection/GlueRedshiftServerlessConnection"
+            ]
+          ]
+        },
+        "AllowedPattern": ".*",
+        "Description": "This is the Glue Connection configured for Redshift Serverless",
+        "Name": "/Glue/RedshiftServerless/Connection/Arn",
+        "Tier": "Advanced"
+      },
+      "Metadata": {
+        "aws:cdk:path": "RedshiftServerless/SSMRedshiftServerlessGlueConnectionArn/Resource"
+      }
+    },
+    "MyCfnSecurityGroupIngress": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "IpProtocol": "tcp",
+        "Description": "Glue connection requirement",
+        "FromPort": 0,
+        "GroupId": {
+          "Fn::GetAtt": [
+            "RedshiftServerlessSecurityGroup47F26F9E",
+            "GroupId"
+          ]
+        },
+        "SourceSecurityGroupId": {
+          "Fn::GetAtt": [
+            "RedshiftServerlessSecurityGroup47F26F9E",
+            "GroupId"
+          ]
+        },
+        "ToPort": 65535
+      },
+      "Metadata": {
+        "aws:cdk:path": "RedshiftServerless/MyCfnSecurityGroupIngress"
+      }
+    },
+    "CDKMetadata": {
+      "Type": "AWS::CDK::Metadata",
+      "Properties": {
+        "Analytics": "v2:deflate64:H4sIAAAAAAAA/2VQXWvDMAz8LX131S50fV7pYIzBGMlgj8N11MyNP4Jkt3TB/33YWTvKnu50kk6HVrCEVTV7kPbbLQY9oNEOGR5xMP5s0YUmSNWLCtZruJvJE89V28+N3sG43bs3SdJiQBLbvdt61+qgvRPyxJ+jlhbG2hvMvYxJMFsYm0DadTeb1yKJ3jKML3jOcoaN0ZJzUUgSqCoYG1SRdDg/kY9Dbt4KTdw5DEW/strHgO9yN8WZ9D9tw+yVliX8Zfif77PrCJmTYFSEga10skMqcej3XmFJELb8pfeBkY5IBpnLu16lRR6kKt4fnvou+ybRmYgwfdChyimSqJF9pGn0wpNwvkU48OJYreDuHpazA2s9p+iCtgj1hD+eN/QX1AEAAA=="
+      },
+      "Metadata": {
+        "aws:cdk:path": "RedshiftServerless/CDKMetadata/Default"
+      }
+    }
+  }
+}

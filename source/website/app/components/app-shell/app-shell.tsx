@@ -9,6 +9,7 @@ import {
   APP_NAME,
   PAGE_CAPABILITY_BY_REGION,
   PAGE_POLICY_ENFORCER,
+  PAGE_INFRASTRUCTURE_PLANNING,
   PAGE_SETTINGS,
   AWS_CAPABILITY_EXTERNAL,
   AWS_CAPABILITY_EXTERNAL_URL,
@@ -55,6 +56,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             items={[
               { type: 'link', text: PAGE_CAPABILITY_BY_REGION, href: '/' },
               { type: 'link', text: PAGE_POLICY_ENFORCER, href: '/policy-enforcer' },
+              { type: 'link', text: PAGE_INFRASTRUCTURE_PLANNING, href: '/infrastructure-planning' },
               { type: 'link', text: PAGE_SETTINGS, href: '/settings' },
               { type: 'divider' },
               {

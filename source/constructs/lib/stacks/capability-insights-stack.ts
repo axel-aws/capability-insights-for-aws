@@ -7,6 +7,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 
 export interface CapabilityInsightsStackProps extends cdk.StackProps {
   privateVpcId?: string;
@@ -102,6 +103,7 @@ export class CapabilityInsightsStack extends cdk.Stack {
       constraintDescription:
         'Must be a comma-separated list of folder names (letters, numbers, hyphens, underscores). No spaces or trailing commas.',
     });
+
 
     // Website bucket name: "capability-insights-website-{account}-{region}"
     // Also referenced in: deployment/deploy.sh, deployment/dev.sh, README.md
@@ -239,91 +241,6 @@ export class CapabilityInsightsStack extends cdk.Stack {
       },
     });
 
-    // Data Fetch Lambda
-    const dataFetchLambdaName = `${prefix}DataFetchLambda`;
-    const dataFetchLambdaRoleName = `${prefix}DataFetchLambdaRole`;
-    const dataFetchLambdaRoleNameFn = cdk.Fn.sub(`${dataFetchLambdaRoleName}-\${AWS::Region}`);
-    const dataFetchLambdaRole = new iam.CfnRole(this, dataFetchLambdaRoleName, {
-      roleName: dataFetchLambdaRoleNameFn,
-      assumeRolePolicyDocument: {
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Principal: {
-              Service: 'lambda.amazonaws.com',
-            },
-            Action: 'sts:AssumeRole',
-          },
-        ],
-      },
-      managedPolicyArns: [cdk.Fn.sub('arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole')],
-      policies: [
-        {
-          policyName: 'S3ReadWritePolicy',
-          policyDocument: {
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Effect: 'Allow',
-                Action: 's3:GetObject',
-                Resource: '*',
-                Condition: {
-                  StringEquals: {
-                    's3:DataAccessPointArn': sourceAccessPointArnParameter.valueAsString,
-                  },
-                },
-              },
-              {
-                Effect: 'Allow',
-                Action: ['s3:PutObject'],
-                Resource: cdk.Fn.sub('${BucketArn}/data/*', {
-                  BucketArn: cdk.Fn.getAtt(websiteBucket.logicalId, 'Arn').toString(),
-                }),
-              },
-            ],
-          },
-        },
-      ],
-    });
-    const dataFetchLambdaFunction = new lambda.CfnFunction(this, dataFetchLambdaName, {
-      functionName: dataFetchLambdaName,
-      runtime: 'nodejs24.x',
-      role: cdk.Fn.getAtt(dataFetchLambdaRole.logicalId, 'Arn').toString(),
-      handler: 'lambda/data-fetch-lambda-main.handler',
-      memorySize: 2048,
-      timeout: 120,
-      code: {
-        s3Bucket: deploymentAssetsBucketNameParameter.valueAsString,
-        s3Key: deploymentAssetsBucketApiLambdaFunctionCodeZipPathParameter.valueAsString,
-      },
-      environment: {
-        variables: {
-          DATA_BUCKET_NAME: cdk.Fn.ref(websiteBucket.logicalId),
-          DATA_BUCKET_PATH: 'data',
-          SOURCE_ACCESS_POINT_ARN: sourceAccessPointArnParameter.valueAsString,
-          SOURCE_FOLDERS: sourceFoldersParameter.valueAsString,
-        },
-      },
-    });
-    const dataFetchLambdaScheduleRule = new events.CfnRule(this, `${prefix}DataFetchLambdaScheduleRule`, {
-      description: `Daily trigger for ${dataFetchLambdaName} lambda function.`,
-      scheduleExpression: 'rate(1 day)',
-      state: 'ENABLED',
-      targets: [
-        {
-          arn: cdk.Fn.getAtt(dataFetchLambdaFunction.logicalId, 'Arn').toString(),
-          id: 'ScheduledLambdaTarget',
-        },
-      ],
-    });
-    new lambda.CfnPermission(this, `${prefix}DataFetchLambdaInvokePermission`, {
-      functionName: cdk.Fn.ref(dataFetchLambdaFunction.logicalId),
-      action: 'lambda:InvokeFunction',
-      principal: 'events.amazonaws.com',
-      sourceArn: cdk.Fn.getAtt(dataFetchLambdaScheduleRule.logicalId, 'Arn').toString(),
-    });
-
     // Policy Configuration DynamoDB Table
     const policyTableName = `${prefix}PolicyConfiguration`;
     const policyTable = new dynamodb.CfnTable(this, policyTableName, {
@@ -392,6 +309,263 @@ export class CapabilityInsightsStack extends cdk.Stack {
     });
     policyTable.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
+    // Plan Configuration DynamoDB Table
+    const planTableName = `${prefix}PlanConfiguration`;
+    const planTable = new dynamodb.CfnTable(this, planTableName, {
+      tableName: cdk.Fn.sub(`${planTableName}-\${AWS::Region}`),
+      billingMode: 'PAY_PER_REQUEST',
+      sseSpecification: {
+        sseEnabled: true,
+      },
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: true,
+      },
+      keySchema: [
+        {
+          attributeName: 'planId',
+          keyType: 'HASH',
+        },
+      ],
+      attributeDefinitions: [
+        {
+          attributeName: 'planId',
+          attributeType: 'S',
+        },
+        {
+          attributeName: 'planName',
+          attributeType: 'S',
+        },
+      ],
+      globalSecondaryIndexes: [
+        {
+          indexName: 'PlanNameIndex',
+          keySchema: [
+            {
+              attributeName: 'planName',
+              keyType: 'HASH',
+            },
+          ],
+          projection: {
+            projectionType: 'ALL',
+          },
+        },
+      ],
+    });
+    planTable.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+
+    // GitHub PAT Secret — stores the GitHub Personal Access Token in Secrets Manager
+    const secretName = `${prefix}GitHubPAT`;
+    const githubPatSecret = new secretsmanager.CfnSecret(this, secretName, {
+      name: cdk.Fn.sub(`${secretName}-\${AWS::Region}`),
+      description: 'GitHub Personal Access Token for Terraform overlay',
+    });
+    githubPatSecret.applyRemovalPolicy(cdk.RemovalPolicy.RETAIN);
+
+    // Data Fetch Lambda
+    const terraformOverlayLambdaName = `${prefix}TerraformOverlayLambda`;
+    const dataFetchLambdaName = `${prefix}DataFetchLambda`;
+    const dataFetchLambdaRoleName = `${prefix}DataFetchLambdaRole`;
+    const dataFetchLambdaRoleNameFn = cdk.Fn.sub(`${dataFetchLambdaRoleName}-\${AWS::Region}`);
+    const dataFetchLambdaRole = new iam.CfnRole(this, dataFetchLambdaRoleName, {
+      roleName: dataFetchLambdaRoleNameFn,
+      assumeRolePolicyDocument: {
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: {
+              Service: 'lambda.amazonaws.com',
+            },
+            Action: 'sts:AssumeRole',
+          },
+        ],
+      },
+      managedPolicyArns: [cdk.Fn.sub('arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole')],
+      policies: [
+        {
+          policyName: 'S3ReadWritePolicy',
+          policyDocument: {
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: 's3:GetObject',
+                Resource: '*',
+                Condition: {
+                  StringEquals: {
+                    's3:DataAccessPointArn': sourceAccessPointArnParameter.valueAsString,
+                  },
+                },
+              },
+              {
+                Effect: 'Allow',
+                Action: ['s3:PutObject'],
+                Resource: cdk.Fn.sub('${BucketArn}/data/*', {
+                  BucketArn: cdk.Fn.getAtt(websiteBucket.logicalId, 'Arn').toString(),
+                }),
+              },
+            ],
+          },
+        },
+        {
+          policyName: 'InvokeTerraformOverlayLambda',
+          policyDocument: {
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: 'lambda:InvokeFunction',
+                Resource: cdk.Fn.sub(
+                  'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${FunctionName}',
+                  { FunctionName: terraformOverlayLambdaName },
+                ),
+              },
+            ],
+          },
+        },
+        {
+          policyName: 'DynamoDBReadPolicy',
+          policyDocument: {
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: 'dynamodb:GetItem',
+                Resource: cdk.Fn.getAtt(policyTable.logicalId, 'Arn').toString(),
+              },
+            ],
+          },
+        },
+        {
+          policyName: 'SecretsManagerReadAccess',
+          policyDocument: {
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: 'secretsmanager:GetSecretValue',
+                Resource: cdk.Fn.getAtt(githubPatSecret.logicalId, 'Id'),
+              },
+            ],
+          },
+        },
+      ],
+    });
+    const dataFetchLambdaFunction = new lambda.CfnFunction(this, dataFetchLambdaName, {
+      functionName: dataFetchLambdaName,
+      runtime: 'nodejs24.x',
+      role: cdk.Fn.getAtt(dataFetchLambdaRole.logicalId, 'Arn').toString(),
+      handler: 'lambda/data-fetch-lambda-main.handler',
+      memorySize: 2048,
+      timeout: 120,
+      code: {
+        s3Bucket: deploymentAssetsBucketNameParameter.valueAsString,
+        s3Key: deploymentAssetsBucketApiLambdaFunctionCodeZipPathParameter.valueAsString,
+      },
+      environment: {
+        variables: {
+          DATA_BUCKET_NAME: cdk.Fn.ref(websiteBucket.logicalId),
+          DATA_BUCKET_PATH: 'data',
+          SOURCE_ACCESS_POINT_ARN: sourceAccessPointArnParameter.valueAsString,
+          SOURCE_FOLDERS: sourceFoldersParameter.valueAsString,
+          TERRAFORM_OVERLAY_FUNCTION_NAME: terraformOverlayLambdaName,
+          POLICY_TABLE_NAME: cdk.Fn.ref(policyTable.logicalId),
+          GITHUB_TOKEN_SECRET_NAME: cdk.Fn.ref(githubPatSecret.logicalId),
+        },
+      },
+    });
+    const dataFetchLambdaScheduleRule = new events.CfnRule(this, `${prefix}DataFetchLambdaScheduleRule`, {
+      description: `Daily trigger for ${dataFetchLambdaName} lambda function.`,
+      scheduleExpression: 'rate(1 day)',
+      state: 'ENABLED',
+      targets: [
+        {
+          arn: cdk.Fn.getAtt(dataFetchLambdaFunction.logicalId, 'Arn').toString(),
+          id: 'ScheduledLambdaTarget',
+        },
+      ],
+    });
+    new lambda.CfnPermission(this, `${prefix}DataFetchLambdaInvokePermission`, {
+      functionName: cdk.Fn.ref(dataFetchLambdaFunction.logicalId),
+      action: 'lambda:InvokeFunction',
+      principal: 'events.amazonaws.com',
+      sourceArn: cdk.Fn.getAtt(dataFetchLambdaScheduleRule.logicalId, 'Arn').toString(),
+    });
+
+    // Terraform Overlay Lambda — runs outside VPC (needs internet access for GitHub API)
+    const terraformOverlayRoleName = `${prefix}TerraformOverlayLambdaRole`;
+    const terraformOverlayRole = new iam.CfnRole(this, terraformOverlayRoleName, {
+      roleName: cdk.Fn.sub(`${terraformOverlayRoleName}-\${AWS::Region}`),
+      assumeRolePolicyDocument: {
+        Version: '2012-10-17',
+        Statement: [{ Effect: 'Allow', Principal: { Service: 'lambda.amazonaws.com' }, Action: 'sts:AssumeRole' }],
+      },
+      managedPolicyArns: [cdk.Fn.sub('arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole')],
+      policies: [
+        {
+          policyName: 'S3PutOverlayData',
+          policyDocument: {
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: 's3:PutObject',
+                Resource: [
+                  cdk.Fn.sub('${BucketArn}/data/json/terraform_overlay.json', {
+                    BucketArn: cdk.Fn.getAtt(websiteBucket.logicalId, 'Arn').toString(),
+                  }),
+                  cdk.Fn.sub('${BucketArn}/data/json/terraform_classic_api_mapping.json', {
+                    BucketArn: cdk.Fn.getAtt(websiteBucket.logicalId, 'Arn').toString(),
+                  }),
+                ],
+              },
+            ],
+          },
+        },
+      ],
+    });
+    const terraformOverlayLambdaFunction = new lambda.CfnFunction(this, terraformOverlayLambdaName, {
+      functionName: terraformOverlayLambdaName,
+      runtime: 'nodejs24.x',
+      handler: 'lambda/terraform-overlay/handler.handler',
+      role: cdk.Fn.getAtt(terraformOverlayRole.logicalId, 'Arn').toString(),
+      code: {
+        s3Bucket: deploymentAssetsBucketNameParameter.valueAsString,
+        s3Key: deploymentAssetsBucketApiLambdaFunctionCodeZipPathParameter.valueAsString,
+      },
+      memorySize: 512,
+      timeout: 300,
+      environment: {
+        variables: {
+          DATA_BUCKET_NAME: cdk.Fn.ref(websiteBucket.logicalId),
+        },
+      },
+    });
+
+    // GitHub Fetch Lambda — runs outside VPC (needs internet access for GitHub API)
+    const githubFetchLambdaName = `${prefix}GitHubFetchLambda`;
+    const githubFetchRoleName = `${prefix}GitHubFetchLambdaRole`;
+    const githubFetchRole = new iam.CfnRole(this, githubFetchRoleName, {
+      roleName: cdk.Fn.sub(`${githubFetchRoleName}-\${AWS::Region}`),
+      assumeRolePolicyDocument: {
+        Version: '2012-10-17',
+        Statement: [{ Effect: 'Allow', Principal: { Service: 'lambda.amazonaws.com' }, Action: 'sts:AssumeRole' }],
+      },
+      managedPolicyArns: [cdk.Fn.sub('arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole')],
+    });
+    new lambda.CfnFunction(this, githubFetchLambdaName, {
+      functionName: githubFetchLambdaName,
+      runtime: 'nodejs24.x',
+      handler: 'lambda/github-fetch-lambda-main.handler',
+      role: cdk.Fn.getAtt(githubFetchRole.logicalId, 'Arn').toString(),
+      code: {
+        s3Bucket: deploymentAssetsBucketNameParameter.valueAsString,
+        s3Key: deploymentAssetsBucketApiLambdaFunctionCodeZipPathParameter.valueAsString,
+      },
+      memorySize: 512,
+      timeout: 120,
+    });
+
     // IAM Policy Helper Lambda — runs outside VPC to reach global IAM endpoint
     const iamHelperLambdaName = `${prefix}IAMPolicyHelper`;
     const iamHelperRoleName = `${prefix}IAMPolicyHelperRole`;
@@ -417,6 +591,7 @@ export class CapabilityInsightsStack extends cdk.Stack {
                   'iam:ListPolicyVersions',
                   'iam:DeletePolicy',
                   'iam:GetPolicy',
+                  'iam:GetPolicyVersion',
                 ],
                 Resource: cdk.Fn.sub('arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/PolicyEnforcer-*'),
               },
@@ -450,6 +625,32 @@ export class CapabilityInsightsStack extends cdk.Stack {
         },
       ],
     });
+
+    // Secrets Manager VPC Endpoint — allows API Lambda to access Secrets Manager
+    // without traversing the public internet.
+    const secretsManagerSecurityGroup = new ec2.CfnSecurityGroup(this, `${prefix}SecretsManagerVpceSg`, {
+      groupDescription: 'Security group for Secrets Manager VPC endpoint',
+      vpcId: vpcIdParameter.valueAsString,
+      securityGroupIngress: [
+        {
+          ipProtocol: 'tcp',
+          fromPort: 443,
+          toPort: 443,
+          sourceSecurityGroupId: apiLambdaSecurityGroup.ref,
+        },
+      ],
+    });
+
+    new ec2.CfnVPCEndpoint(this, `${prefix}SecretsManagerVpcEndpoint`, {
+      vpcId: vpcIdParameter.valueAsString,
+      vpcEndpointType: 'Interface',
+      serviceName: cdk.Fn.sub('com.amazonaws.${AWS::Region}.secretsmanager'),
+      privateDnsEnabled: true,
+      subnetIds: [privateSubnetIdParameter.valueAsString],
+      securityGroupIds: [secretsManagerSecurityGroup.ref],
+      tags: [{ key: 'Name', value: `${prefix}SecretsManagerVpcEndpoint` }],
+    });
+
     const apiLambdaRoleName = `${prefix}ApiLambdaRole`;
     const apiLambdaRoleNameFn = cdk.Fn.sub(`${apiLambdaRoleName}-\${AWS::Region}`);
     const apiLambdaRole = new iam.CfnRole(this, apiLambdaRoleName, {
@@ -502,6 +703,10 @@ export class CapabilityInsightsStack extends cdk.Stack {
                   cdk.Fn.sub(
                     'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${FunctionName}',
                     { FunctionName: iamHelperLambdaName },
+                  ),
+                  cdk.Fn.sub(
+                    'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${FunctionName}',
+                    { FunctionName: githubFetchLambdaName },
                   ),
                 ],
               },
@@ -571,6 +776,21 @@ export class CapabilityInsightsStack extends cdk.Stack {
           },
         },
         {
+          policyName: 'S3PlanDataWriteDelete',
+          policyDocument: {
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: ['s3:PutObject', 's3:DeleteObject'],
+                Resource: cdk.Fn.sub('${BucketArn}/data/plans/*', {
+                  BucketArn: cdk.Fn.getAtt(websiteBucket.logicalId, 'Arn').toString(),
+                }),
+              },
+            ],
+          },
+        },
+        {
           policyName: 'DynamoDBPolicyTableAccess',
           policyDocument: {
             Version: '2012-10-17',
@@ -591,6 +811,44 @@ export class CapabilityInsightsStack extends cdk.Stack {
                     TableArn: cdk.Fn.getAtt(policyTable.logicalId, 'Arn').toString(),
                   }),
                 ],
+              },
+            ],
+          },
+        },
+        {
+          policyName: 'DynamoDBPlanTableAccess',
+          policyDocument: {
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: [
+                  'dynamodb:GetItem',
+                  'dynamodb:PutItem',
+                  'dynamodb:UpdateItem',
+                  'dynamodb:DeleteItem',
+                  'dynamodb:Query',
+                  'dynamodb:Scan',
+                ],
+                Resource: [
+                  cdk.Fn.getAtt(planTable.logicalId, 'Arn').toString(),
+                  cdk.Fn.sub('${TableArn}/index/*', {
+                    TableArn: cdk.Fn.getAtt(planTable.logicalId, 'Arn').toString(),
+                  }),
+                ],
+              },
+            ],
+          },
+        },
+        {
+          policyName: 'SecretsManagerAccess',
+          policyDocument: {
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: ['secretsmanager:GetSecretValue', 'secretsmanager:PutSecretValue'],
+                Resource: cdk.Fn.getAtt(githubPatSecret.logicalId, 'Id'),
               },
             ],
           },
@@ -619,7 +877,10 @@ export class CapabilityInsightsStack extends cdk.Stack {
           CLOUDTRAIL_ANALYZER_LAMBDA_NAME: cloudTrailAnalyzerLambdaNameParameter.valueAsString,
           ANALYSIS_STATE_MACHINE_ARN: analysisStateMachineArnParameter.valueAsString,
           POLICY_TABLE_NAME: cdk.Fn.ref(policyTable.logicalId),
+          PLAN_TABLE_NAME: cdk.Fn.ref(planTable.logicalId),
           IAM_HELPER_LAMBDA_NAME: iamHelperLambdaName,
+          GITHUB_TOKEN_SECRET_NAME: cdk.Fn.ref(githubPatSecret.logicalId),
+          GITHUB_FETCH_FUNCTION_NAME: githubFetchLambdaName,
         },
       },
     });

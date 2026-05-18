@@ -125,6 +125,9 @@ export class PolicyConfigStore {
 
       let items = (result.Items ?? []).map(item => deserializeFromItem(item as Record<string, unknown>));
 
+      // Filter out the SYNC_SETTINGS record (stored in same table but not a policy)
+      items = items.filter(item => item.policyId !== 'SYNC_SETTINGS');
+
       // Apply tag filtering in-memory
       if (query?.tagKey && query?.tagValue) {
         items = items.filter(item =>

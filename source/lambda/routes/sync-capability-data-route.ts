@@ -7,7 +7,7 @@ import { EnvironmentKey, getEnv } from '../constants/environment';
 const dataFetchLambda = new LambdaFunctionClient(getEnv(EnvironmentKey.DATA_FETCH_LAMBDA_NAME));
 
 export const syncCapabilityDataRoute = async (): Promise<APIGatewayProxyResult> => {
-  await dataFetchLambda.invokeAsync();
+  await dataFetchLambda.invokeAsync(JSON.stringify({ source: 'manual' }));
 
   return {
     statusCode: StatusCode.OK,

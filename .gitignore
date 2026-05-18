@@ -15,6 +15,9 @@ cdk.out/
 .env.local
 .env.*.local
 
+# Deployment config (contains account-specific values)
+deployment/deploy-config.yaml
+
 # Cache
 .eslintcache
 

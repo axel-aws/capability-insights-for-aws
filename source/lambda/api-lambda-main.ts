@@ -15,11 +15,33 @@ import {
   listPoliciesRoute,
   getPolicyRoute,
   updatePolicyRoute,
-  deletePolicyRoute,
   refreshPolicyRoute,
   previewPolicyRoute,
   templatePolicyRoute,
 } from './routes/policy-routes';
+import {
+  getPolicyPartsRoute,
+  getPolicyPartDetailRoute,
+  deletePolicyPartRoute,
+  cascadingDeletePolicyRoute,
+} from './routes/policy-parts-routes';
+import { getSyncSettingsRoute, putSyncSettingsRoute } from './routes/sync-settings-routes';
+import {
+  getDataInfoRoute,
+  postDataUploadRoute,
+  postMergePreviewRoute,
+  postMergeCommitRoute,
+} from './routes/data-utilities-routes';
+import {
+  createPlanRoute,
+  listPlansRoute,
+  listPlanNamesRoute,
+  getPlanRoute,
+  updatePlanRoute,
+  deletePlanRoute,
+  reprocessPlanRoute,
+  getCapabilitySetRoute,
+} from './routes/plan-routes';
 
 // --- Exact match routes ---
 const routes: Map<string, RouteHandler> = new Map();
@@ -74,10 +96,36 @@ registerRoute(HttpMethod.GET, '/policies', listPoliciesRoute);
 
 registerParameterizedRoute(HttpMethod.GET, '/policies/:policyId', getPolicyRoute);
 registerParameterizedRoute(HttpMethod.PUT, '/policies/:policyId', updatePolicyRoute);
-registerParameterizedRoute(HttpMethod.DELETE, '/policies/:policyId', deletePolicyRoute);
+registerParameterizedRoute(HttpMethod.DELETE, '/policies/:policyId', cascadingDeletePolicyRoute);
 registerParameterizedRoute(HttpMethod.POST, '/policies/:policyId/refresh', refreshPolicyRoute);
 registerParameterizedRoute(HttpMethod.GET, '/policies/:policyId/preview', previewPolicyRoute);
 registerParameterizedRoute(HttpMethod.GET, '/policies/:policyId/template', templatePolicyRoute);
+
+// Policy Parts routes
+registerParameterizedRoute(HttpMethod.GET, '/policies/:policyId/parts', getPolicyPartsRoute);
+registerParameterizedRoute(HttpMethod.GET, '/policies/:policyId/parts/:partIndex', getPolicyPartDetailRoute);
+registerParameterizedRoute(HttpMethod.DELETE, '/policies/:policyId/parts/:partIndex', deletePolicyPartRoute);
+
+// Sync Settings routes
+registerRoute(HttpMethod.GET, '/syncSettings', getSyncSettingsRoute);
+registerRoute(HttpMethod.PUT, '/syncSettings', putSyncSettingsRoute);
+
+// Data Utilities routes
+registerRoute(HttpMethod.GET, '/data/info', getDataInfoRoute);
+registerRoute(HttpMethod.POST, '/data/upload', postDataUploadRoute);
+registerRoute(HttpMethod.POST, '/data/merge/preview', postMergePreviewRoute);
+registerRoute(HttpMethod.POST, '/data/merge/commit', postMergeCommitRoute);
+
+// Infrastructure Planning routes
+registerRoute(HttpMethod.POST, '/plans', createPlanRoute);
+registerRoute(HttpMethod.GET, '/plans', listPlansRoute);
+registerRoute(HttpMethod.GET, '/plans/names', listPlanNamesRoute);
+
+registerParameterizedRoute(HttpMethod.GET, '/plans/:planId', getPlanRoute);
+registerParameterizedRoute(HttpMethod.PUT, '/plans/:planId', updatePlanRoute);
+registerParameterizedRoute(HttpMethod.DELETE, '/plans/:planId', deletePlanRoute);
+registerParameterizedRoute(HttpMethod.POST, '/plans/:planId/reprocess', reprocessPlanRoute);
+registerParameterizedRoute(HttpMethod.GET, '/plans/:planId/capability-set', getCapabilitySetRoute);
 
 // --- Main handler ---
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {

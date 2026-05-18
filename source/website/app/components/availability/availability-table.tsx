@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useCollection } from '@cloudscape-design/collection-hooks';
+import type { PropertyFilterQuery } from '@cloudscape-design/collection-hooks';
 import Table from '@cloudscape-design/components/table';
 import PropertyFilter from '@cloudscape-design/components/property-filter';
 import type { PropertyFilterProps } from '@cloudscape-design/components/property-filter';
@@ -14,8 +15,10 @@ import type { Region } from '@capability-insights/shared/types/capability/region
 import type { RegionalAvailability } from '@capability-insights/shared/types/availability/regional-availability';
 import { AvailabilityStatus } from '@capability-insights/shared/types/availability/availability-status';
 import type { StackResourcesResponse } from '@capability-insights/shared/types/capability/stack';
+import type { CapabilitySet } from '@capability-insights/shared/types/infrastructure-planning/plan-configuration';
 import type { ExportUrls } from '~/clients/capability-insights-client';
 import { capabilityInsightsClient } from '~/clients/capability-insights-client';
+import { infrastructurePlanningClient } from '~/clients/infrastructure-planning-client';
 import {
   createColumns,
   createFilteringProperties,
@@ -33,6 +36,16 @@ interface AvailabilityTableProps<T extends RegionalAvailability> {
   loading?: boolean;
   /** Whether to include the Stack filtering property (CFN tab only). */
   includeStackProperty?: boolean;
+  /** Whether to include the Plan filtering property. */
+  includePlanProperty?: boolean;
+  /** Optional custom cell renderer for availability (region) columns. */
+  availabilityCell?: (row: T, regionCode: string) => React.ReactNode;
+  /**
+   * Optional custom filtering function that overrides the default property-filter-based filtering.
+   * When provided, this function is used instead of `createFilteringFunction`.
+   * It receives the item and the property filter query, and returns true if the item should be shown.
+   */
+  customFilteringFunction?: (item: T, query: PropertyFilterQuery) => boolean;
 }
 
 export default function AvailabilityTable<T extends RegionalAvailability>({
@@ -44,6 +57,9 @@ export default function AvailabilityTable<T extends RegionalAvailability>({
   downloadUrls,
   loading = false,
   includeStackProperty = false,
+  includePlanProperty = false,
+  availabilityCell,
+  customFilteringFunction,
 }: AvailabilityTableProps<T>) {
   const [preferences, setPreferences] = useState<CollectionPreferencesProps.Preferences>({
     stickyColumns: { first: 1, last: 0 },
@@ -59,6 +75,13 @@ export default function AvailabilityTable<T extends RegionalAvailability>({
   const [stackFilteringOptions, setStackFilteringOptions] = useState<PropertyFilterProps.FilteringOption[]>([]);
   // Counter to force re-render when cache is updated (since useRef doesn't trigger re-renders)
   const [renderTick, setRenderTick] = useState(0);
+
+  // --- Plan integration state ---
+  const planCapabilityCache = useRef<Map<string, CapabilitySet>>(new Map());
+  const planLoadingNamesRef = useRef<Set<string>>(new Set());
+  const [planLoading, setPlanLoading] = useState(false);
+  const [planError, setPlanError] = useState<string | null>(null);
+  const [planFilteringOptions, setPlanFilteringOptions] = useState<PropertyFilterProps.FilteringOption[]>([]);
 
   const onStackDataNeeded = useCallback((stackName: string) => {
     // Skip if already cached or currently loading.
@@ -91,36 +114,98 @@ export default function AvailabilityTable<T extends RegionalAvailability>({
     });
   }, []);
 
-  const handleLoadItems = useCallback(({ detail }: { detail: PropertyFilterProps.LoadItemsDetail }) => {
-    // Only fetch stack names when the user is typing in the Stack property value field
-    if (detail.filteringProperty?.key !== 'stack') return;
-    if (!detail.firstPage && !detail.samePage) return;
+  const onPlanDataNeeded = useCallback((planName: string) => {
+    // Skip if already cached or currently loading.
+    // Same deferred pattern as onStackDataNeeded to avoid setState during render.
+    if (planCapabilityCache.current.has(planName)) return;
+    if (planLoadingNamesRef.current.has(planName)) return;
+    planLoadingNamesRef.current.add(planName);
 
-    capabilityInsightsClient
-      .listStacks()
-      .then(stacks => {
-        setStackFilteringOptions(stacks.map(name => ({ propertyKey: 'stack', value: name })));
-      })
-      .catch(() => {
-        // Silently fail — the user can still type a stack name manually
-        setStackFilteringOptions([]);
-      });
+    queueMicrotask(() => {
+      setPlanLoading(true);
+      // Look up the plan by name to get its planId, then fetch the capability set
+      infrastructurePlanningClient
+        .listPlans({ search: planName })
+        .then(plans => {
+          const plan = plans.find(p => p.planName === planName);
+          if (!plan) {
+            throw new Error(`Plan "${planName}" not found`);
+          }
+          return infrastructurePlanningClient.getCapabilitySet(plan.planId);
+        })
+        .then(capabilitySet => {
+          planCapabilityCache.current.set(planName, capabilitySet);
+          planLoadingNamesRef.current.delete(planName);
+          setPlanLoading(planLoadingNamesRef.current.size > 0);
+          // Trigger re-render so the filtering function picks up the new cache entry
+          setRenderTick(t => t + 1);
+        })
+        .catch(err => {
+          // Store empty capability set so the filter fails-open (matches everything)
+          planCapabilityCache.current.set(planName, {
+            cfnResourceTypes: [],
+            terraformResourceTypes: [],
+            apiOperations: [],
+            serviceNames: [],
+            terraformToCfnMapping: {},
+          });
+          planLoadingNamesRef.current.delete(planName);
+          setPlanLoading(planLoadingNamesRef.current.size > 0);
+          setPlanError(err instanceof Error ? err.message : 'Failed to load plan capability set');
+          setRenderTick(t => t + 1);
+        });
+    });
+  }, []);
+
+  const handleLoadItems = useCallback(({ detail }: { detail: PropertyFilterProps.LoadItemsDetail }) => {
+    // Fetch stack names when the user is typing in the Stack property value field
+    if (detail.filteringProperty?.key === 'stack') {
+      if (!detail.firstPage && !detail.samePage) return;
+      capabilityInsightsClient
+        .listStacks()
+        .then(stacks => {
+          setStackFilteringOptions(stacks.map(name => ({ propertyKey: 'stack', value: name })));
+        })
+        .catch(() => {
+          // Silently fail — the user can still type a stack name manually
+          setStackFilteringOptions([]);
+        });
+    }
+
+    // Fetch plan names when the user is typing in the Plan property value field
+    if (detail.filteringProperty?.key === 'plan') {
+      if (!detail.firstPage && !detail.samePage) return;
+      infrastructurePlanningClient
+        .listPlanNames()
+        .then(names => {
+          setPlanFilteringOptions(names.map(name => ({ propertyKey: 'plan', value: name })));
+        })
+        .catch(() => {
+          // Silently fail — the user can still type a plan name manually
+          setPlanFilteringOptions([]);
+        });
+    }
   }, []);
 
   const columnDefinitions = createColumns({
     nameColumnHeader: nameHeader,
     regions,
     nameCell: nameCell as (row: RegionalAvailability) => React.ReactNode,
+    availabilityCell: availabilityCell as ((row: RegionalAvailability, regionCode: string) => React.ReactNode) | undefined,
   });
-  const filteringProperties = createFilteringProperties(regions, { includeStackProperty });
+  const filteringProperties = createFilteringProperties(regions, { includeStackProperty, includePlanProperty });
   const filteringFunction = useMemo(
     () =>
-      createFilteringFunction(
-        regionalAvailability,
-        includeStackProperty ? stackResourceCache.current : undefined,
-        includeStackProperty ? onStackDataNeeded : undefined,
-      ),
-    [regionalAvailability, includeStackProperty, onStackDataNeeded, renderTick],
+      customFilteringFunction
+        ? (customFilteringFunction as (item: RegionalAvailability, query: PropertyFilterQuery) => boolean)
+        : createFilteringFunction(
+            regionalAvailability,
+            includeStackProperty ? stackResourceCache.current : undefined,
+            includeStackProperty ? onStackDataNeeded : undefined,
+            includePlanProperty ? planCapabilityCache.current : undefined,
+            includePlanProperty ? onPlanDataNeeded : undefined,
+          ),
+    [regionalAvailability, includeStackProperty, includePlanProperty, onStackDataNeeded, onPlanDataNeeded, renderTick, customFilteringFunction],
   );
 
   const hasNesting = regionalAvailability.some(i => i.parentId !== null);
@@ -162,20 +247,36 @@ export default function AvailabilityTable<T extends RegionalAvailability>({
     ...propertyFilterProps.filteringOptions,
     ...regionFilteringOptions,
     ...(includeStackProperty ? stackFilteringOptions : []),
+    ...(includePlanProperty ? planFilteringOptions : []),
   ];
 
   return (
     <SpaceBetween size="m">
-      {stackError && (
+      {(stackError || planError) && (
         <Flashbar
           items={[
-            {
-              type: 'error',
-              content: stackError,
-              dismissible: true,
-              onDismiss: () => setStackError(null),
-              id: 'stack-filter-error',
-            },
+            ...(stackError
+              ? [
+                  {
+                    type: 'error' as const,
+                    content: stackError,
+                    dismissible: true,
+                    onDismiss: () => setStackError(null),
+                    id: 'stack-filter-error',
+                  },
+                ]
+              : []),
+            ...(planError
+              ? [
+                  {
+                    type: 'error' as const,
+                    content: planError,
+                    dismissible: true,
+                    onDismiss: () => setPlanError(null),
+                    id: 'plan-filter-error',
+                  },
+                ]
+              : []),
           ]}
         />
       )}
@@ -183,7 +284,7 @@ export default function AvailabilityTable<T extends RegionalAvailability>({
         {...collectionProps}
         columnDefinitions={columnDefinitions}
         items={collectionItems}
-        loading={loading || (includeStackProperty && stackLoading)}
+        loading={loading || (includeStackProperty && stackLoading) || (includePlanProperty && planLoading)}
         loadingText="Loading data"
         stickyColumns={preferences.stickyColumns}
         columnDisplay={preferences.contentDisplay}
@@ -242,7 +343,7 @@ export default function AvailabilityTable<T extends RegionalAvailability>({
               },
               { properties: 'Regions', values: 'Region values', group: 'regions' },
             ]}
-            {...(includeStackProperty ? { onLoadItems: handleLoadItems } : {})}
+            {...(includeStackProperty || includePlanProperty ? { onLoadItems: handleLoadItems } : {})}
           />
         }
         pagination={<Pagination {...paginationProps} />}

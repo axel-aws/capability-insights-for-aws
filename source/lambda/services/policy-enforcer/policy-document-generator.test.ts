@@ -118,8 +118,8 @@ describe('generatePolicyDocument', () => {
     });
   });
 
-  describe('partially available services produce two-tier policies', () => {
-    it('produces blanket deny + specific API deny for partially available services', () => {
+  describe('partially available services use optimal strategy', () => {
+    it('uses flipped strategy (available actions in NotAction) when fewer available than unavailable', () => {
       const catalogData = buildCatalogData([
         {
           name: 's3',
@@ -155,26 +155,80 @@ describe('generatePolicyDocument', () => {
 
       const result = generatePolicyDocument(options);
 
-      // Should produce two documents: blanket deny + API deny
-      expect(result.documents).toHaveLength(2);
-      expect(result.splitRequired).toBe(true);
+      // With 1 available and 1 unavailable action in s3, the flipped strategy
+      // (list the 1 available action in NotAction) is cheaper than the original
+      // (wildcard + 1 action in separate deny doc), so it produces a single document
+      expect(result.documents).toHaveLength(1);
+      expect(result.splitRequired).toBe(false);
       expect(result.error).toBeUndefined();
 
-      // First document: blanket deny with wildcards
+      // First document: blanket deny with ec2:* wildcard and s3:GetObject specific action
       const blanketDoc = result.documents[0];
       expect(blanketDoc.Statement[0].NotAction).toContain('ec2:*');
-      expect(blanketDoc.Statement[0].NotAction).toContain('s3:*');
+      expect(blanketDoc.Statement[0].NotAction).toContain('s3:GetObject');
+      // s3:* should NOT be present since we're using the flipped strategy
+      expect(blanketDoc.Statement[0].NotAction).not.toContain('s3:*');
       expect(blanketDoc.Statement[0].Sid).toContain('PolicyEnforcerBlanketDeny');
 
-      // Second document: specific API deny
-      const apiDenyDoc = result.documents[1];
-      expect(apiDenyDoc.Statement[0].Action).toContain('s3:PutObject');
-      expect(apiDenyDoc.Statement[0].Sid).toContain('PolicyEnforcerAPIDeny');
-      expect(apiDenyDoc.Statement[0].Sid).toContain('Part1');
-
       // Metrics
-      expect(result.partialDenyActionCount).toBe(1);
-      expect(result.fullyAvailableServiceCount).toBe(2); // ec2 fully + s3 partially
+      expect(result.partialDenyActionCount).toBe(0);
+      expect(result.fullyAvailableServiceCount).toBe(2);
+    });
+
+    it('uses original strategy (wildcard + Action deny) when fewer unavailable than available', () => {
+      const catalogData = buildCatalogData([
+        {
+          name: 's3',
+          apis: [
+            {
+              action: 'GetObject',
+              homepage: 'https://awscli.amazonaws.com/v2/documentation/api/latest/reference/s3/index.html',
+              availability: { 'us-east-1': AvailabilityStatus.AVAILABLE, 'us-west-2': AvailabilityStatus.AVAILABLE },
+            },
+            {
+              action: 'PutObject',
+              homepage: 'https://awscli.amazonaws.com/v2/documentation/api/latest/reference/s3/index.html',
+              availability: { 'us-east-1': AvailabilityStatus.AVAILABLE, 'us-west-2': AvailabilityStatus.AVAILABLE },
+            },
+            {
+              action: 'DeleteObject',
+              homepage: 'https://awscli.amazonaws.com/v2/documentation/api/latest/reference/s3/index.html',
+              availability: { 'us-east-1': AvailabilityStatus.AVAILABLE, 'us-west-2': AvailabilityStatus.AVAILABLE },
+            },
+            {
+              action: 'ListBuckets',
+              homepage: 'https://awscli.amazonaws.com/v2/documentation/api/latest/reference/s3/index.html',
+              availability: { 'us-east-1': AvailabilityStatus.AVAILABLE, 'us-west-2': AvailabilityStatus.AVAILABLE },
+            },
+            {
+              action: 'CreateBucket',
+              homepage: 'https://awscli.amazonaws.com/v2/documentation/api/latest/reference/s3/index.html',
+              availability: { 'us-east-1': AvailabilityStatus.AVAILABLE, 'us-west-2': AvailabilityStatus.NOT_AVAILABLE },
+            },
+          ],
+        },
+      ]);
+
+      const options = buildOptions({
+        catalogData,
+        configuration: buildConfiguration({ mode: 'intersection' }),
+      });
+
+      const result = generatePolicyDocument(options);
+
+      // With 4 available and 1 unavailable, original strategy (wildcard + 1 deny) is cheaper
+      // than listing 4 available actions individually
+      expect(result.documents).toHaveLength(2);
+      expect(result.splitRequired).toBe(true);
+
+      // First document: blanket deny with s3:* wildcard
+      const blanketDoc = result.documents[0];
+      expect(blanketDoc.Statement[0].NotAction).toContain('s3:*');
+
+      // Second document: specific API deny for the one unavailable action
+      const apiDenyDoc = result.documents[1];
+      expect(apiDenyDoc.Statement[0].Action).toContain('s3:CreateBucket');
+      expect(apiDenyDoc.Statement[0].Sid).toContain('PolicyEnforcerAPIDeny');
     });
   });
 
@@ -335,23 +389,25 @@ describe('generatePolicyDocument', () => {
 
       const result = generatePolicyDocument(options);
 
-      // s3 has 1 available (exception) and 1 unavailable, so it's partially available
-      // s3:* should be in NotAction, and s3:PutObject should be in Action deny
+      // s3 has 1 available (exception) and 1 unavailable
+      // With the optimization: 1 available action (s3:GetObject) is cheaper to list
+      // in NotAction than wildcard + 1 deny action, so it uses the flipped strategy
       const blanketDoc = result.documents[0];
-      expect(blanketDoc.Statement[0].NotAction).toContain('s3:*');
+      expect(blanketDoc.Statement[0].NotAction).toContain('s3:GetObject');
+      // s3:PutObject should NOT be in NotAction (it's unavailable and not excepted)
+      expect(blanketDoc.Statement[0].NotAction).not.toContain('s3:PutObject');
 
-      // The specific deny should only contain PutObject, not GetObject
-      if (result.documents.length > 1) {
-        const apiDenyDoc = result.documents[1];
-        expect(apiDenyDoc.Statement[0].Action).toContain('s3:PutObject');
-        expect(apiDenyDoc.Statement[0].Action).not.toContain('s3:GetObject');
-      }
+      // No separate deny document needed since the blanket deny covers s3:PutObject
+      // (it's not in NotAction, so it's implicitly denied)
+      expect(result.documents).toHaveLength(1);
     });
   });
 
   describe('IAM policy size limit enforcement', () => {
     it('bin-packs specific deny actions into multiple documents within 6,144 char limit', () => {
-      // Generate many services with partial availability to create lots of specific deny actions
+      // Generate services where the original strategy (wildcard + deny) is cheaper,
+      // meaning many available APIs and few unavailable ones per service.
+      // This forces actions into the Action deny tier which then needs bin-packing.
       const services: Array<{
         name: string;
         apis: Array<{ action: string; homepage: string; availability: Record<string, AvailabilityStatus> }>;
@@ -359,14 +415,16 @@ describe('generatePolicyDocument', () => {
 
       for (let i = 0; i < 50; i++) {
         const apis: Array<{ action: string; homepage: string; availability: Record<string, AvailabilityStatus> }> = [];
-        // One available API per service
-        apis.push({
-          action: `AvailableAction${i}`,
-          homepage: `https://awscli.amazonaws.com/v2/documentation/api/latest/reference/svc${i}/index.html`,
-          availability: { 'us-east-1': AvailabilityStatus.AVAILABLE, 'us-west-2': AvailabilityStatus.AVAILABLE },
-        });
-        // Many unavailable APIs per service
+        // Many available APIs per service (makes wildcard strategy cheaper)
         for (let j = 0; j < 10; j++) {
+          apis.push({
+            action: `AvailableAction${i}x${j}LongNameForPadding`,
+            homepage: `https://awscli.amazonaws.com/v2/documentation/api/latest/reference/svc${i}/index.html`,
+            availability: { 'us-east-1': AvailabilityStatus.AVAILABLE, 'us-west-2': AvailabilityStatus.AVAILABLE },
+          });
+        }
+        // A few unavailable APIs per service (these go to Action deny tier)
+        for (let j = 0; j < 3; j++) {
           apis.push({
             action: `UnavailableAction${i}x${j}LongNameForPadding`,
             homepage: `https://awscli.amazonaws.com/v2/documentation/api/latest/reference/svc${i}/index.html`,
@@ -390,7 +448,7 @@ describe('generatePolicyDocument', () => {
         expect(size).toBeLessThanOrEqual(6144);
       }
 
-      // Should have multiple documents
+      // Should have multiple documents (blanket deny + at least one API deny)
       expect(result.documents.length).toBeGreaterThan(1);
 
       // First document is always the blanket deny

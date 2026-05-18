@@ -6,6 +6,7 @@ import {
   IAMClient,
   CreatePolicyCommand,
   CreatePolicyVersionCommand,
+  GetPolicyVersionCommand,
   ListPolicyVersionsCommand,
   DeletePolicyVersionCommand,
   DeletePolicyCommand,
@@ -14,17 +15,26 @@ import {
 const iamClient = new IAMClient({});
 
 export interface IAMHelperEvent {
-  action: 'create' | 'update' | 'delete';
+  action: 'create' | 'update' | 'delete' | 'getPolicyDocument' | 'listVersions';
   policyName?: string;
   policyArn?: string;
   policyDocument?: string;
   description?: string;
+  versionId?: string;
 }
 
 export interface IAMHelperResult {
   success: boolean;
   policyArn?: string;
+  policyDocument?: string;
+  versions?: PolicyVersionSummary[];
   error?: string;
+}
+
+export interface PolicyVersionSummary {
+  versionId: string;
+  isDefaultVersion: boolean;
+  createDate: string;
 }
 
 export const handler = async (event: IAMHelperEvent): Promise<IAMHelperResult> => {
@@ -78,8 +88,49 @@ export const handler = async (event: IAMHelperEvent): Promise<IAMHelperResult> =
         return { success: true };
       }
 
+      case 'getPolicyDocument': {
+        if (!event.policyArn) return { success: false, error: 'policyArn required for getPolicyDocument' };
+
+        let versionId = event.versionId;
+
+        // If no versionId specified, find the default version
+        if (!versionId) {
+          const versionsResponse = await iamClient.send(new ListPolicyVersionsCommand({ PolicyArn: event.policyArn }));
+          const defaultVersion = (versionsResponse.Versions ?? []).find(v => v.IsDefaultVersion);
+          if (!defaultVersion?.VersionId) {
+            return { success: false, error: 'Could not determine default policy version' };
+          }
+          versionId = defaultVersion.VersionId;
+        }
+
+        const policyVersionResponse = await iamClient.send(new GetPolicyVersionCommand({
+          PolicyArn: event.policyArn,
+          VersionId: versionId,
+        }));
+
+        const document = policyVersionResponse.PolicyVersion?.Document;
+        if (!document) {
+          return { success: false, error: 'Policy document not found' };
+        }
+
+        return { success: true, policyDocument: decodeURIComponent(document) };
+      }
+
+      case 'listVersions': {
+        if (!event.policyArn) return { success: false, error: 'policyArn required for listVersions' };
+
+        const versionsResponse = await iamClient.send(new ListPolicyVersionsCommand({ PolicyArn: event.policyArn }));
+        const versionSummaries: PolicyVersionSummary[] = (versionsResponse.Versions ?? []).map(v => ({
+          versionId: v.VersionId ?? '',
+          isDefaultVersion: v.IsDefaultVersion ?? false,
+          createDate: v.CreateDate?.toISOString() ?? '',
+        }));
+
+        return { success: true, versions: versionSummaries };
+      }
+
       default:
-        return { success: false, error: `Unknown action: ${event.action}` };
+        return { success: false, error: `Unknown action: ${(event as IAMHelperEvent).action}` };
     }
   } catch (error: unknown) {
     return { success: false, error: error instanceof Error ? error.message : String(error) };

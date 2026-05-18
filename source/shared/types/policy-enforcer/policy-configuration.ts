@@ -68,3 +68,39 @@ export interface PreviewResponse {
   estimatedPolicySize: number;
   splitRequired: boolean;
 }
+
+/** Represents a single IAM managed policy part. */
+export interface PolicyPart {
+  partIndex: number;
+  arn: string;
+  partType: 'blanket-deny' | 'specific-api-deny';
+  documentSize: number;
+  statementItemCount: number; // NotAction wildcards or Action items
+}
+
+/** Response from GET /policies/:policyId/parts */
+export interface PolicyPartsResponse {
+  parts: PolicyPart[];
+  totalParts: number;
+  combinedSize: number;
+}
+
+/** Response from GET /policies/:policyId/parts/:partIndex */
+export interface PolicyPartDetailResponse {
+  part: PolicyPart;
+  document: Record<string, unknown>; // The full IAM policy JSON
+  services: ServiceActionGroup[];
+}
+
+/** Actions grouped by service prefix for display. */
+export interface ServiceActionGroup {
+  servicePrefix: string;
+  actions: string[];
+}
+
+/** Response from cascading delete with partial failures. */
+export interface CascadingDeleteResponse {
+  success: boolean;
+  deletedArns: string[];
+  failedArns: { arn: string; error: string }[];
+}

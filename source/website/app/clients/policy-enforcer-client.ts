@@ -3,6 +3,9 @@ import type {
   CreatePolicyRequest,
   ListPoliciesQuery,
   PreviewResponse,
+  PolicyPartsResponse,
+  PolicyPartDetailResponse,
+  CascadingDeleteResponse,
 } from '@capability-insights/shared/types/policy-enforcer/policy-configuration';
 import { s3Client } from './s3-client';
 
@@ -79,7 +82,7 @@ export class PolicyEnforcerClient {
     return data.policy;
   }
 
-  async deletePolicy(policyId: string): Promise<void> {
+  async deletePolicy(policyId: string): Promise<CascadingDeleteResponse> {
     const baseUrl = await this.getApiBaseUrl();
     const res = await fetch(`${baseUrl}/policies/${encodeURIComponent(policyId)}`, {
       method: 'DELETE',
@@ -88,6 +91,7 @@ export class PolicyEnforcerClient {
       const body = await res.json();
       throw new Error(body.message ?? `Failed to delete policy: ${res.status}`);
     }
+    return res.json();
   }
 
   async refreshPolicy(policyId: string): Promise<void> {
@@ -119,6 +123,47 @@ export class PolicyEnforcerClient {
       throw new Error(body.message ?? `Failed to download template: ${res.status}`);
     }
     return res.text();
+  }
+
+  async getPolicyParts(policyId: string): Promise<PolicyPartsResponse> {
+    const baseUrl = await this.getApiBaseUrl();
+    const res = await fetch(`${baseUrl}/policies/${encodeURIComponent(policyId)}/parts`);
+    if (!res.ok) {
+      const body = await res.json();
+      throw new Error(body.message ?? `Failed to get policy parts: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async getPolicyPartDetail(
+    policyId: string,
+    partIndex: number,
+  ): Promise<PolicyPartDetailResponse> {
+    const baseUrl = await this.getApiBaseUrl();
+    const res = await fetch(
+      `${baseUrl}/policies/${encodeURIComponent(policyId)}/parts/${partIndex}`,
+    );
+    if (!res.ok) {
+      const body = await res.json();
+      throw new Error(body.message ?? `Failed to get policy part detail: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async deletePolicyPart(policyId: string, partIndex: number): Promise<void> {
+    const baseUrl = await this.getApiBaseUrl();
+    const res = await fetch(
+      `${baseUrl}/policies/${encodeURIComponent(policyId)}/parts/${partIndex}`,
+      { method: 'DELETE' },
+    );
+    if (!res.ok) {
+      const body = await res.json();
+      throw new Error(body.message ?? `Failed to delete policy part: ${res.status}`);
+    }
+  }
+
+  async refreshAllPolicies(policyIds: string[]): Promise<void> {
+    await Promise.all(policyIds.map((policyId) => this.refreshPolicy(policyId)));
   }
 }
 

@@ -414,7 +414,14 @@ exports[`CloudFormation template matches snapshot 1`] = `
               "Ref": "CloudTrailAnalyzerLambdaName",
             },
             "DATA_FETCH_LAMBDA_NAME": "CapabilityInsightsDataFetchLambda",
+            "GITHUB_FETCH_FUNCTION_NAME": "CapabilityInsightsGitHubFetchLambda",
+            "GITHUB_TOKEN_SECRET_NAME": {
+              "Ref": "CapabilityInsightsGitHubPAT",
+            },
             "IAM_HELPER_LAMBDA_NAME": "CapabilityInsightsIAMPolicyHelper",
+            "PLAN_TABLE_NAME": {
+              "Ref": "CapabilityInsightsPlanConfiguration",
+            },
             "POLICY_TABLE_NAME": {
               "Ref": "CapabilityInsightsPolicyConfiguration",
             },
@@ -539,6 +546,14 @@ exports[`CloudFormation template matches snapshot 1`] = `
                         },
                       ],
                     },
+                    {
+                      "Fn::Sub": [
+                        "arn:\${AWS::Partition}:lambda:\${AWS::Region}:\${AWS::AccountId}:function:\${FunctionName}",
+                        {
+                          "FunctionName": "CapabilityInsightsGitHubFetchLambda",
+                        },
+                      ],
+                    },
                   ],
                 },
               ],
@@ -635,6 +650,34 @@ exports[`CloudFormation template matches snapshot 1`] = `
               "Statement": [
                 {
                   "Action": [
+                    "s3:PutObject",
+                    "s3:DeleteObject",
+                  ],
+                  "Effect": "Allow",
+                  "Resource": {
+                    "Fn::Sub": [
+                      "\${BucketArn}/data/plans/*",
+                      {
+                        "BucketArn": {
+                          "Fn::GetAtt": [
+                            "capabilityinsightswebsite",
+                            "Arn",
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+              "Version": "2012-10-17",
+            },
+            "PolicyName": "S3PlanDataWriteDelete",
+          },
+          {
+            "PolicyDocument": {
+              "Statement": [
+                {
+                  "Action": [
                     "dynamodb:GetItem",
                     "dynamodb:PutItem",
                     "dynamodb:UpdateItem",
@@ -669,6 +712,67 @@ exports[`CloudFormation template matches snapshot 1`] = `
               "Version": "2012-10-17",
             },
             "PolicyName": "DynamoDBPolicyTableAccess",
+          },
+          {
+            "PolicyDocument": {
+              "Statement": [
+                {
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:DeleteItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan",
+                  ],
+                  "Effect": "Allow",
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "CapabilityInsightsPlanConfiguration",
+                        "Arn",
+                      ],
+                    },
+                    {
+                      "Fn::Sub": [
+                        "\${TableArn}/index/*",
+                        {
+                          "TableArn": {
+                            "Fn::GetAtt": [
+                              "CapabilityInsightsPlanConfiguration",
+                              "Arn",
+                            ],
+                          },
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+              "Version": "2012-10-17",
+            },
+            "PolicyName": "DynamoDBPlanTableAccess",
+          },
+          {
+            "PolicyDocument": {
+              "Statement": [
+                {
+                  "Action": [
+                    "secretsmanager:GetSecretValue",
+                    "secretsmanager:PutSecretValue",
+                  ],
+                  "Effect": "Allow",
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "CapabilityInsightsGitHubPAT",
+                      "Id",
+                    ],
+                  },
+                },
+              ],
+              "Version": "2012-10-17",
+            },
+            "PolicyName": "SecretsManagerAccess",
           },
         ],
         "RoleName": {
@@ -737,12 +841,19 @@ exports[`CloudFormation template matches snapshot 1`] = `
               "Ref": "capabilityinsightswebsite",
             },
             "DATA_BUCKET_PATH": "data",
+            "GITHUB_TOKEN_SECRET_NAME": {
+              "Ref": "CapabilityInsightsGitHubPAT",
+            },
+            "POLICY_TABLE_NAME": {
+              "Ref": "CapabilityInsightsPolicyConfiguration",
+            },
             "SOURCE_ACCESS_POINT_ARN": {
               "Ref": "SourceAccessPointArn",
             },
             "SOURCE_FOLDERS": {
               "Ref": "SourceFolders",
             },
+            "TERRAFORM_OVERLAY_FUNCTION_NAME": "CapabilityInsightsTerraformOverlayLambda",
           },
         },
         "FunctionName": "CapabilityInsightsDataFetchLambda",
@@ -834,6 +945,62 @@ exports[`CloudFormation template matches snapshot 1`] = `
             },
             "PolicyName": "S3ReadWritePolicy",
           },
+          {
+            "PolicyDocument": {
+              "Statement": [
+                {
+                  "Action": "lambda:InvokeFunction",
+                  "Effect": "Allow",
+                  "Resource": {
+                    "Fn::Sub": [
+                      "arn:\${AWS::Partition}:lambda:\${AWS::Region}:\${AWS::AccountId}:function:\${FunctionName}",
+                      {
+                        "FunctionName": "CapabilityInsightsTerraformOverlayLambda",
+                      },
+                    ],
+                  },
+                },
+              ],
+              "Version": "2012-10-17",
+            },
+            "PolicyName": "InvokeTerraformOverlayLambda",
+          },
+          {
+            "PolicyDocument": {
+              "Statement": [
+                {
+                  "Action": "dynamodb:GetItem",
+                  "Effect": "Allow",
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "CapabilityInsightsPolicyConfiguration",
+                      "Arn",
+                    ],
+                  },
+                },
+              ],
+              "Version": "2012-10-17",
+            },
+            "PolicyName": "DynamoDBReadPolicy",
+          },
+          {
+            "PolicyDocument": {
+              "Statement": [
+                {
+                  "Action": "secretsmanager:GetSecretValue",
+                  "Effect": "Allow",
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "CapabilityInsightsGitHubPAT",
+                      "Id",
+                    ],
+                  },
+                },
+              ],
+              "Version": "2012-10-17",
+            },
+            "PolicyName": "SecretsManagerReadAccess",
+          },
         ],
         "RoleName": {
           "Fn::Sub": "CapabilityInsightsDataFetchLambdaRole-\${AWS::Region}",
@@ -859,6 +1026,66 @@ exports[`CloudFormation template matches snapshot 1`] = `
         ],
       },
       "Type": "AWS::Events::Rule",
+    },
+    "CapabilityInsightsGitHubFetchLambda": {
+      "Properties": {
+        "Code": {
+          "S3Bucket": {
+            "Ref": "DeploymentAssetsBucketName",
+          },
+          "S3Key": {
+            "Ref": "DeploymentAssetsBucketApiLambdaFunctionCodeZipPath",
+          },
+        },
+        "FunctionName": "CapabilityInsightsGitHubFetchLambda",
+        "Handler": "lambda/github-fetch-lambda-main.handler",
+        "MemorySize": 512,
+        "Role": {
+          "Fn::GetAtt": [
+            "CapabilityInsightsGitHubFetchLambdaRole",
+            "Arn",
+          ],
+        },
+        "Runtime": "nodejs24.x",
+        "Timeout": 120,
+      },
+      "Type": "AWS::Lambda::Function",
+    },
+    "CapabilityInsightsGitHubFetchLambdaRole": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Sub": "arn:\${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+          },
+        ],
+        "RoleName": {
+          "Fn::Sub": "CapabilityInsightsGitHubFetchLambdaRole-\${AWS::Region}",
+        },
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "CapabilityInsightsGitHubPAT": {
+      "DeletionPolicy": "Retain",
+      "Properties": {
+        "Description": "GitHub Personal Access Token for Terraform overlay",
+        "Name": {
+          "Fn::Sub": "CapabilityInsightsGitHubPAT-\${AWS::Region}",
+        },
+      },
+      "Type": "AWS::SecretsManager::Secret",
+      "UpdateReplacePolicy": "Retain",
     },
     "CapabilityInsightsIAMPolicyHelper": {
       "Properties": {
@@ -913,6 +1140,7 @@ exports[`CloudFormation template matches snapshot 1`] = `
                     "iam:ListPolicyVersions",
                     "iam:DeletePolicy",
                     "iam:GetPolicy",
+                    "iam:GetPolicyVersion",
                   ],
                   "Effect": "Allow",
                   "Resource": {
@@ -959,6 +1187,53 @@ exports[`CloudFormation template matches snapshot 1`] = `
         },
       },
       "Type": "AWS::EC2::VPCEndpoint",
+    },
+    "CapabilityInsightsPlanConfiguration": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "planId",
+            "AttributeType": "S",
+          },
+          {
+            "AttributeName": "planName",
+            "AttributeType": "S",
+          },
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "PlanNameIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "planName",
+                "KeyType": "HASH",
+              },
+            ],
+            "Projection": {
+              "ProjectionType": "ALL",
+            },
+          },
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "planId",
+            "KeyType": "HASH",
+          },
+        ],
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true,
+        },
+        "SSESpecification": {
+          "SSEEnabled": true,
+        },
+        "TableName": {
+          "Fn::Sub": "CapabilityInsightsPlanConfiguration-\${AWS::Region}",
+        },
+      },
+      "Type": "AWS::DynamoDB::Table",
+      "UpdateReplacePolicy": "Delete",
     },
     "CapabilityInsightsPolicyConfiguration": {
       "DeletionPolicy": "Delete",
@@ -1031,6 +1306,54 @@ exports[`CloudFormation template matches snapshot 1`] = `
       "Type": "AWS::DynamoDB::Table",
       "UpdateReplacePolicy": "Delete",
     },
+    "CapabilityInsightsSecretsManagerVpcEndpoint": {
+      "Properties": {
+        "PrivateDnsEnabled": true,
+        "SecurityGroupIds": [
+          {
+            "Ref": "CapabilityInsightsSecretsManagerVpceSg",
+          },
+        ],
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.\${AWS::Region}.secretsmanager",
+        },
+        "SubnetIds": [
+          {
+            "Ref": "BackendSubnetId",
+          },
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "CapabilityInsightsSecretsManagerVpcEndpoint",
+          },
+        ],
+        "VpcEndpointType": "Interface",
+        "VpcId": {
+          "Ref": "PrivateVpcId",
+        },
+      },
+      "Type": "AWS::EC2::VPCEndpoint",
+    },
+    "CapabilityInsightsSecretsManagerVpceSg": {
+      "Properties": {
+        "GroupDescription": "Security group for Secrets Manager VPC endpoint",
+        "SecurityGroupIngress": [
+          {
+            "FromPort": 443,
+            "IpProtocol": "tcp",
+            "SourceSecurityGroupId": {
+              "Ref": "CapabilityInsightsApiLambdaSecurityGroup",
+            },
+            "ToPort": 443,
+          },
+        ],
+        "VpcId": {
+          "Ref": "PrivateVpcId",
+        },
+      },
+      "Type": "AWS::EC2::SecurityGroup",
+    },
     "CapabilityInsightsStepFunctionsVpcEndpoint": {
       "Properties": {
         "PrivateDnsEnabled": true,
@@ -1059,6 +1382,104 @@ exports[`CloudFormation template matches snapshot 1`] = `
         },
       },
       "Type": "AWS::EC2::VPCEndpoint",
+    },
+    "CapabilityInsightsTerraformOverlayLambda": {
+      "Properties": {
+        "Code": {
+          "S3Bucket": {
+            "Ref": "DeploymentAssetsBucketName",
+          },
+          "S3Key": {
+            "Ref": "DeploymentAssetsBucketApiLambdaFunctionCodeZipPath",
+          },
+        },
+        "Environment": {
+          "Variables": {
+            "DATA_BUCKET_NAME": {
+              "Ref": "capabilityinsightswebsite",
+            },
+          },
+        },
+        "FunctionName": "CapabilityInsightsTerraformOverlayLambda",
+        "Handler": "lambda/terraform-overlay/handler.handler",
+        "MemorySize": 512,
+        "Role": {
+          "Fn::GetAtt": [
+            "CapabilityInsightsTerraformOverlayLambdaRole",
+            "Arn",
+          ],
+        },
+        "Runtime": "nodejs24.x",
+        "Timeout": 300,
+      },
+      "Type": "AWS::Lambda::Function",
+    },
+    "CapabilityInsightsTerraformOverlayLambdaRole": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Sub": "arn:\${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+          },
+        ],
+        "Policies": [
+          {
+            "PolicyDocument": {
+              "Statement": [
+                {
+                  "Action": "s3:PutObject",
+                  "Effect": "Allow",
+                  "Resource": [
+                    {
+                      "Fn::Sub": [
+                        "\${BucketArn}/data/json/terraform_overlay.json",
+                        {
+                          "BucketArn": {
+                            "Fn::GetAtt": [
+                              "capabilityinsightswebsite",
+                              "Arn",
+                            ],
+                          },
+                        },
+                      ],
+                    },
+                    {
+                      "Fn::Sub": [
+                        "\${BucketArn}/data/json/terraform_classic_api_mapping.json",
+                        {
+                          "BucketArn": {
+                            "Fn::GetAtt": [
+                              "capabilityinsightswebsite",
+                              "Arn",
+                            ],
+                          },
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+              "Version": "2012-10-17",
+            },
+            "PolicyName": "S3PutOverlayData",
+          },
+        ],
+        "RoleName": {
+          "Fn::Sub": "CapabilityInsightsTerraformOverlayLambdaRole-\${AWS::Region}",
+        },
+      },
+      "Type": "AWS::IAM::Role",
     },
     "CapabilityInsightsWriteConfigLambda": {
       "Properties": {

@@ -1,0 +1,18 @@
+# Capability Insights deployment configuration
+# Copy this file to deploy-config.yaml and fill in your values.
+# Any populated values will skip the interactive prompt during deployment.
+# CLI flags (--private-vpc-id, etc.) still take precedence over this file.
+
+# Required infrastructure
+private_vpc_id: vpc-0abc123
+backend_subnet_id: subnet-0abc123
+api_access_subnet_id: subnet-0def456
+deployment_assets_bucket_name: my-deploy-bucket
+
+# Data source configuration
+source_access_point_arn: arn:aws:s3:us-east-1:123456789012:accesspoint/my-access-point
+source_folders: public
+
+# Usage analysis (optional)
+enable_usage_analysis: false
+cloudtrail_bucket: 

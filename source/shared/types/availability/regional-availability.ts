@@ -28,6 +28,8 @@ export interface ApiAvailability extends RegionalAvailability {
 
 export interface CfnAvailability extends RegionalAvailability {
   serviceName?: string;
+  /** Original CFN type name, preserved when the display name is translated to Terraform conventions. */
+  cfnName?: string;
 }
 
 export interface ProductAvailability extends RegionalAvailability {

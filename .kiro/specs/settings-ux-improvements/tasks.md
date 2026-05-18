@@ -1,0 +1,40 @@
+# Implementation Tasks
+
+- [x] 1. Add `dataSyncEnabled` field to backend sync settings
+  - [x] 1.1 Add `dataSyncEnabled: boolean` to `SyncSettings` interface in `source/lambda/services/sync-settings-store.ts`
+  - [x] 1.2 Add `dataSyncEnabled: boolean` to `SyncSettingsResponse` interface in `source/lambda/services/sync-settings-store.ts`
+  - [x] 1.3 Update `getSettings()` to read `dataSyncEnabled` from DynamoDB item, defaulting to `true` when not present
+  - [x] 1.4 Update `updateSettings()` to accept and persist `dataSyncEnabled` field in DynamoDB
+  - [x] 1.5 Update `sync-settings-store.test.ts` to cover `dataSyncEnabled` read/write behavior
+- [x] 2. Update sync settings API routes to support `dataSyncEnabled`
+  - [x] 2.1 Update `toSyncSettingsResponse()` in `source/lambda/routes/sync-settings-routes.ts` to include `dataSyncEnabled`
+  - [x] 2.2 Update `putSyncSettingsRoute()` to accept `dataSyncEnabled` in request body and pass to store
+  - [x] 2.3 Add validation: `dataSyncEnabled` must be a boolean if provided in PUT body
+- [x] 3. Add conditional data sync check to Data Fetch Lambda
+  - [x] 3.1 At the start of the handler in `source/lambda/data-fetch-lambda-main.ts`, read `dataSyncEnabled` from `SyncSettingsStore`
+  - [x] 3.2 If `dataSyncEnabled` is `false` AND the invocation is a scheduled event (not manual), skip the S3 access point fetch loop
+  - [x] 3.3 When skipping, write sync metadata with a `dataSyncSkipped: true` field and return early with a 200 status
+  - [x] 3.4 Ensure manual invocations (triggered via API route) always proceed regardless of toggle state
+  - [x] 3.5 Update `data-fetch-lambda-main.test.ts` to test conditional fetch behavior based on `dataSyncEnabled` and invocation source
+- [x] 4. Add data sync toggle to frontend Settings tab
+  - [x] 4.1 Update `SyncSettingsResponse` interface in `source/website/app/clients/capability-insights-client.ts` to include `dataSyncEnabled: boolean`
+  - [x] 4.2 Update `updateSyncSettings()` parameter type to accept `dataSyncEnabled?: boolean`
+  - [x] 4.3 Add a `Toggle` component labeled "Scheduled data sync" in the "Data synchronization" container in `source/website/app/pages/settings.tsx`
+  - [x] 4.4 Load initial toggle state from `getSyncSettings()` response and bind to toggle checked state
+  - [x] 4.5 On toggle change, call `updateSyncSettings({ ...currentSettings, dataSyncEnabled: checked })` and show success/error notification
+  - [x] 4.6 Add helper text below the toggle: "When disabled, the daily scheduled sync from the S3 access point will not run. Manual sync using the button below is unaffected."
+- [x] 5. Add descriptive text to Data Upload section
+  - [x] 5.1 Add `<Alert type="info">` at the top of the `SpaceBetween` in `source/website/app/components/data-upload-section.tsx` with text: "Replace the authoritative data file in your data store with an uploaded file. This completely overwrites the existing file."
+  - [x] 5.2 Add `<Box variant="small" color="text-body-secondary">` near the Upload button with warning text: "Uploading will completely replace the selected data file. This action cannot be undone."
+- [x] 6. Add descriptive text and workflow guidance to Dataset Merge section
+  - [x] 6.1 Add `<Alert type="info">` at the top of the `SpaceBetween` in `source/website/app/components/dataset-merge-section.tsx` with text: "Combine an uploaded file with your existing data. New items are added, existing items are updated, and nothing is deleted. Use this to bring together data from multiple sources."
+  - [x] 6.2 Add step-by-step guidance using an ordered list in a `Box` component explaining the workflow: (1) Select which data file to merge into, (2) Upload a JSON file containing new or updated data, (3) Preview what will change (additions, updates, unchanged), (4) Confirm to apply or cancel to discard
+  - [x] 6.3 Add `<Box variant="small" color="text-body-secondary">` helper text: "Merging is non-destructive — existing items are preserved and only additions or updates are applied."
+- [x] 7. Add descriptive text to Export section
+  - [x] 7.1 Add `<Alert type="info">` at the top of the `SpaceBetween` in `source/website/app/components/export-section.tsx` with text: "Download your current data files for backup or sharing with other deployments."
+- [x] 8. Verify regression prevention
+  - [x] 8.1 Verify manual "Sync capability data" button still triggers data fetch when `dataSyncEnabled` is `false`
+  - [x] 8.2 Verify existing upload workflow (select file → validate → upload → refresh list) works with new description text present
+  - [x] 8.3 Verify existing merge workflow (select target → upload → preview → confirm/cancel) works with new description and guidance present
+  - [x] 8.4 Verify existing export workflow (individual download links + ZIP download) works with new description present
+  - [x] 8.5 Verify Terraform overlay toggle continues to function independently of the data sync toggle

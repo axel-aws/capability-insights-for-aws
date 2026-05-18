@@ -13,6 +13,7 @@ import Badge from '@cloudscape-design/components/badge';
 import Select from '@cloudscape-design/components/select';
 import type { SelectProps } from '@cloudscape-design/components/select';
 import Box from '@cloudscape-design/components/box';
+import Link from '@cloudscape-design/components/link';
 
 import { APP_NAME } from '~/constants/app';
 import { policyEnforcerClient } from '~/clients/policy-enforcer-client';
@@ -224,7 +225,17 @@ export default function PolicyEnforcerPage() {
           {
             id: 'name',
             header: 'Name',
-            cell: item => item.policyName,
+            cell: item => (
+              <Link
+                href={`/policy-enforcer/${item.policyId}`}
+                onFollow={(e) => {
+                  e.preventDefault();
+                  navigate(`/policy-enforcer/${item.policyId}`);
+                }}
+              >
+                {item.policyName}
+              </Link>
+            ),
             sortingField: 'policyName',
             width: 200,
           },

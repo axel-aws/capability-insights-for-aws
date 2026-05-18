@@ -45,6 +45,8 @@ interface ServiceClassification {
   availableAPIs: number;
   /** Number of APIs NOT available in all selected regions */
   unavailableAPIs: number;
+  /** The specific IAM actions that are available */
+  availableActions: string[];
   /** The specific IAM actions that are unavailable */
   unavailableActions: string[];
 }
@@ -82,6 +84,7 @@ function classifyServices(
 
     let availableCount = 0;
     const unavailableActions: string[] = [];
+    const availableActions: string[] = [];
 
     for (const operation of service.apis) {
       const iamAction = toIamAction(service.sdkServiceName, operation.apiAction, operation.homepage);
@@ -104,6 +107,7 @@ function classifyServices(
 
       if (isAvailable) {
         availableCount++;
+        availableActions.push(iamAction);
       } else {
         unavailableActions.push(iamAction);
       }
@@ -114,6 +118,7 @@ function classifyServices(
       totalAPIs: service.apis.length,
       availableAPIs: availableCount,
       unavailableAPIs: service.apis.length - availableCount,
+      availableActions,
       unavailableActions,
     });
   }
@@ -228,22 +233,31 @@ function binPackActions(actions: string[], timestamp: string): PolicyDocument[] 
 }
 
 /**
- * Generates IAM/SCP policy documents using a two-tier strategy:
+ * Generates IAM/SCP policy documents using a two-tier strategy with size optimization:
  *
- * Tier 1 (Blanket Deny): A single policy with NotAction containing `service:*` wildcards
- * for services that have at least one available API. Services with zero available APIs
- * are implicitly denied by the blanket deny (they're not in the NotAction list).
+ * Tier 1 (Blanket Deny): A single policy with NotAction containing either `service:*` wildcards
+ * or specific available action names. Services with zero available APIs are implicitly denied
+ * by the blanket deny (they're not in the NotAction list).
  *
  * Tier 2 (Specific API Deny): One or more policies with Action lists containing the
  * specific unavailable APIs within partially-available services. These are bin-packed
  * into 6,144-char chunks.
+ *
+ * Size optimization for partially-available services:
+ * For each partially-available service, the generator compares two strategies:
+ * - Strategy A: `service:*` in NotAction + list all unavailable actions in Action deny
+ * - Strategy B: list all available actions individually in NotAction (no Action deny needed)
+ *
+ * It picks whichever produces fewer total characters. When a service has many unavailable
+ * actions but few available ones (common in newer regions), Strategy B dramatically reduces
+ * the number of Action deny documents needed.
  *
  * Classification logic per service:
  * | Condition                                        | Strategy                                              |
  * |--------------------------------------------------|-------------------------------------------------------|
  * | availableAPIs == 0                               | Don't add to NotAction (blanket deny covers it)       |
  * | availableAPIs == totalAPIs                       | Add `service:*` to NotAction list                     |
- * | availableAPIs > 0 && availableAPIs < totalAPIs   | Add `service:*` to NotAction + deny unavailable APIs  |
+ * | availableAPIs > 0 && availableAPIs < totalAPIs   | Compare strategies A vs B, pick smaller               |
  */
 export function generatePolicyDocument(options: PolicyDocumentOptions): GeneratedPolicy {
   const { catalogData, configuration, generationTimestamp } = options;
@@ -252,14 +266,16 @@ export function generatePolicyDocument(options: PolicyDocumentOptions): Generate
   // Classify all services
   const classifications = classifyServices(catalogData, regions, mode, exceptions);
 
-  // Build the NotAction wildcard list and collect specific deny actions
-  const notActionWildcards: string[] = [];
+  // Build the NotAction list and collect specific deny actions
+  const notActionEntries: string[] = [];
   const specificDenyActions: string[] = [];
   let blanketDenyServiceCount = 0;
   let fullyAvailableServiceCount = 0;
 
   // Track prefixes already added to avoid duplicates from services sharing a prefix
   const addedWildcardPrefixes = new Set<string>();
+  // Track specific actions already added to NotAction to avoid duplicates
+  const addedNotActionEntries = new Set<string>();
 
   for (const classification of classifications) {
     if (classification.availableAPIs === 0) {
@@ -269,31 +285,57 @@ export function generatePolicyDocument(options: PolicyDocumentOptions): Generate
       // All APIs available — add service:* to NotAction
       const wildcard = `${classification.iamPrefix}:*`;
       if (!addedWildcardPrefixes.has(wildcard)) {
-        notActionWildcards.push(wildcard);
+        notActionEntries.push(wildcard);
         addedWildcardPrefixes.add(wildcard);
+        addedNotActionEntries.add(wildcard);
       }
       fullyAvailableServiceCount++;
     } else {
-      // Partially available — add service:* to NotAction AND deny specific APIs
+      // Partially available — compare two strategies:
+      // Strategy A (current): service:* in NotAction + list unavailable actions in Action deny
+      // Strategy B (flipped): list available actions in NotAction (no separate deny needed)
+      //
+      // Pick whichever produces fewer total characters in the output.
+      // Strategy A cost: wildcard in NotAction ("service:*") + all unavailable actions in Action deny
+      // Strategy B cost: all available actions listed individually in NotAction
       const wildcard = `${classification.iamPrefix}:*`;
-      if (!addedWildcardPrefixes.has(wildcard)) {
-        notActionWildcards.push(wildcard);
-        addedWildcardPrefixes.add(wildcard);
+      const wildcardCost = wildcard.length;
+      const unavailableCost = classification.unavailableActions.reduce((sum, a) => sum + a.length + 3, 0); // +3 for JSON: quotes + comma
+      const strategyACost = wildcardCost + unavailableCost;
+
+      const availableCost = classification.availableActions.reduce((sum, a) => sum + a.length + 3, 0); // +3 for JSON: quotes + comma
+      const strategyBCost = availableCost;
+
+      if (strategyBCost < strategyACost) {
+        // Flipped: list available actions directly in NotAction
+        for (const action of classification.availableActions) {
+          if (!addedNotActionEntries.has(action)) {
+            notActionEntries.push(action);
+            addedNotActionEntries.add(action);
+          }
+        }
+      } else {
+        // Original: service:* in NotAction + deny specific unavailable actions
+        if (!addedWildcardPrefixes.has(wildcard)) {
+          notActionEntries.push(wildcard);
+          addedWildcardPrefixes.add(wildcard);
+          addedNotActionEntries.add(wildcard);
+        }
+        specificDenyActions.push(...classification.unavailableActions);
       }
-      specificDenyActions.push(...classification.unavailableActions);
-      fullyAvailableServiceCount++; // counted as "available" since it has some APIs
+      fullyAvailableServiceCount++;
     }
   }
 
   // Sort for deterministic output and deduplicate
-  notActionWildcards.sort();
+  notActionEntries.sort();
   const uniqueSpecificDenyActions = [...new Set(specificDenyActions)].sort();
 
   const partialDenyActionCount = uniqueSpecificDenyActions.length;
 
-  // Build Policy 1: Blanket Deny with NotAction wildcards
+  // Build Policy 1: Blanket Deny with NotAction entries
   const blanketDenySid = generateBlanketDenySid(generationTimestamp);
-  const blanketDenyDoc = buildBlanketDenyDocument(notActionWildcards, blanketDenySid);
+  const blanketDenyDoc = buildBlanketDenyDocument(notActionEntries, blanketDenySid);
 
   // Handle SCP type
   if (policyType === 'SCP') {
@@ -308,7 +350,7 @@ export function generatePolicyDocument(options: PolicyDocumentOptions): Generate
           {
             Sid: blanketDenySid,
             Effect: 'Deny',
-            NotAction: notActionWildcards,
+            NotAction: notActionEntries,
             Resource: '*',
           },
           {

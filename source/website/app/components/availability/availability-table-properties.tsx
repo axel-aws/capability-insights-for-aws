@@ -13,6 +13,7 @@ import type { RegionalAvailability } from '@capability-insights/shared/types/ava
 import { RegionalAvailabilityType } from '@capability-insights/shared/types/availability/regional-availability';
 import type { AvailabilityStatus } from '@capability-insights/shared/types/availability/availability-status';
 import type { StackResourcesResponse, PropertyMatch } from '@capability-insights/shared/types/capability/stack';
+import type { CapabilitySet } from '@capability-insights/shared/types/infrastructure-planning/plan-configuration';
 import AvailabilityStatusIndicator from '~/components/availability/availability-status-indicator';
 
 const enumOperators: PropertyFilterProps.FilteringProperty['operators'] = [
@@ -24,10 +25,12 @@ export function createColumns({
   nameColumnHeader,
   regions,
   nameCell,
+  availabilityCell,
 }: {
   nameColumnHeader: string;
   regions: Region[];
   nameCell?: (row: RegionalAvailability) => React.ReactNode;
+  availabilityCell?: (row: RegionalAvailability, regionCode: string) => React.ReactNode;
 }): TableProps.ColumnDefinition<RegionalAvailability>[] {
   return [
     {
@@ -51,6 +54,9 @@ export function createColumns({
         width: 160,
         cell: row => {
           if (!row.regionalAvailability) return null;
+          if (availabilityCell) {
+            return availabilityCell(row, r.Region);
+          }
           return (
             <AvailabilityStatusIndicator
               status={(row.regionalAvailability[r.Region] as AvailabilityStatus) ?? null}
@@ -65,7 +71,7 @@ export function createColumns({
 
 export function createFilteringProperties(
   regions: Region[],
-  options?: { includeStackProperty?: boolean },
+  options?: { includeStackProperty?: boolean; includePlanProperty?: boolean },
 ): PropertyFilterProps.FilteringProperty[] {
   const properties: PropertyFilterProps.FilteringProperty[] = [
     {
@@ -96,6 +102,16 @@ export function createFilteringProperties(
       key: 'stack',
       propertyLabel: 'Stack',
       groupValuesLabel: 'Stack values',
+      operators: ['=', '!='],
+      group: 'properties',
+    });
+  }
+
+  if (options?.includePlanProperty) {
+    properties.push({
+      key: 'plan',
+      propertyLabel: 'Plan',
+      groupValuesLabel: 'Plan values',
       operators: ['=', '!='],
       group: 'properties',
     });
@@ -148,7 +164,9 @@ function itemMatchesStack(
     }
     case RegionalAvailabilityType.RESOURCE_TYPE: {
       const parent = item.parentId ? byId.get(item.parentId) : undefined;
-      const key = `${parent?.name ?? ''}::${item.name}`;
+      // Use cfnName if available (when row has been translated to Terraform convention)
+      const resourceName = (item as { cfnName?: string }).cfnName ?? item.name;
+      const key = `${parent?.name ?? ''}::${resourceName}`;
       return resourceTypeSet.has(key);
     }
     case RegionalAvailabilityType.PROPERTY: {
@@ -156,7 +174,8 @@ function itemMatchesStack(
       const rtRow = item.parentId ? byId.get(item.parentId) : undefined;
       if (!rtRow) return false;
       const serviceRow = rtRow.parentId ? byId.get(rtRow.parentId) : undefined;
-      const key = `${serviceRow?.name ?? ''}::${rtRow.name}`;
+      const resourceName = (rtRow as { cfnName?: string }).cfnName ?? rtRow.name;
+      const key = `${serviceRow?.name ?? ''}::${resourceName}`;
       return resourceTypeSet.has(key);
     }
     case RegionalAvailabilityType.CONFIGURATION: {
@@ -165,7 +184,8 @@ function itemMatchesStack(
       const rtRow = propRow?.parentId ? byId.get(propRow.parentId) : undefined;
       if (!rtRow) return false;
       const serviceRow = rtRow.parentId ? byId.get(rtRow.parentId) : undefined;
-      const key = `${serviceRow?.name ?? ''}::${rtRow.name}`;
+      const resourceName = (rtRow as { cfnName?: string }).cfnName ?? rtRow.name;
+      const key = `${serviceRow?.name ?? ''}::${resourceName}`;
       if (!resourceTypeSet.has(key)) return false;
       const matches = propertyMatchMap.get(key);
       if (matches && matches.length > 0) {
@@ -179,11 +199,80 @@ function itemMatchesStack(
 }
 
 /**
+ * Determines if a RegionalAvailability item matches a plan's capability set.
+ * Matching logic varies by row type (tab context):
+ *
+ * - SERVICE (Services tab): matches if item.name is in capabilitySet.serviceNames
+ * - FEATURE (Services tab): matches if parent service name is in capabilitySet.serviceNames
+ * - SDK_SERVICE (API tab): matches if any child operation is in capabilitySet.apiOperations
+ * - OPERATION (API tab): matches if item.name is in capabilitySet.apiOperations
+ * - RESOURCE_TYPE (CFN tab): matches if item.name (or cfnName) is in capabilitySet.cfnResourceTypes
+ * - PROPERTY (CFN tab): matches if parent resource type is in capabilitySet.cfnResourceTypes
+ */
+export function itemMatchesPlan(
+  item: RegionalAvailability,
+  capabilitySet: CapabilitySet,
+  byId: Map<string, RegionalAvailability>,
+): boolean {
+  switch (item.regionalAvailabilityType) {
+    case RegionalAvailabilityType.SERVICE: {
+      // Services tab: match service name against capabilitySet.serviceNames
+      return capabilitySet.serviceNames.includes(item.name);
+    }
+    case RegionalAvailabilityType.FEATURE: {
+      // Services tab: match if parent service name is in serviceNames
+      const parent = item.parentId ? byId.get(item.parentId) : undefined;
+      if (!parent) return false;
+      return capabilitySet.serviceNames.includes(parent.name);
+    }
+    case RegionalAvailabilityType.SDK_SERVICE: {
+      // API tab: SDK Service matches if any child operation is in apiOperations
+      for (const [, candidate] of byId) {
+        if (
+          candidate.parentId === item.id &&
+          candidate.regionalAvailabilityType === RegionalAvailabilityType.OPERATION
+        ) {
+          if (capabilitySet.apiOperations.includes(candidate.name)) return true;
+        }
+      }
+      return false;
+    }
+    case RegionalAvailabilityType.OPERATION: {
+      // API tab: match operation name against capabilitySet.apiOperations
+      return capabilitySet.apiOperations.includes(item.name);
+    }
+    case RegionalAvailabilityType.RESOURCE_TYPE: {
+      // CFN tab: match resource type name against capabilitySet.cfnResourceTypes
+      const resourceName = (item as { cfnName?: string }).cfnName ?? item.name;
+      return capabilitySet.cfnResourceTypes.includes(resourceName);
+    }
+    case RegionalAvailabilityType.PROPERTY: {
+      // CFN tab: match if parent resource type is in cfnResourceTypes
+      const rtRow = item.parentId ? byId.get(item.parentId) : undefined;
+      if (!rtRow) return false;
+      const resourceName = (rtRow as { cfnName?: string }).cfnName ?? rtRow.name;
+      return capabilitySet.cfnResourceTypes.includes(resourceName);
+    }
+    case RegionalAvailabilityType.CONFIGURATION: {
+      // CFN tab: match if parent resource type is in cfnResourceTypes (same as PROPERTY)
+      const propRow = item.parentId ? byId.get(item.parentId) : undefined;
+      const rtRow = propRow?.parentId ? byId.get(propRow.parentId) : undefined;
+      if (!rtRow) return false;
+      const resourceName = (rtRow as { cfnName?: string }).cfnName ?? rtRow.name;
+      return capabilitySet.cfnResourceTypes.includes(resourceName);
+    }
+    default:
+      return false;
+  }
+}
+
+/**
  * Creates a filtering function that handles:
  * - Recursive AND/OR evaluation of token groups (Requirement 8)
  * - Region availability lookups (keys prefixed with "region:")
  * - Parent-chain walking for known property keys (name, regionalAvailabilityType)
  * - Stack token evaluation via cached API calls (Requirement 9)
+ * - Plan token evaluation via cached capability set data
  * - Free-text token matching against name and regionalAvailabilityType
  * - Parent-to-child inheritance (matched parent → children included)
  */
@@ -191,6 +280,8 @@ export function createFilteringFunction(
   items: RegionalAvailability[],
   stackResourceCache?: Map<string, StackResourcesResponse>,
   onStackDataNeeded?: (stackName: string) => void,
+  planCapabilityCache?: Map<string, CapabilitySet>,
+  onPlanDataNeeded?: (planName: string) => void,
 ) {
   const byId = new Map(items.map(i => [i.id, i]));
 
@@ -241,6 +332,19 @@ export function createFilteringFunction(
     return token.operator === '=' ? matches : !matches;
   };
 
+  // --- Plan token evaluation ---
+  const evaluatePlanToken = (item: RegionalAvailability, token: PropertyFilterToken): boolean => {
+    const planName = token.value as string;
+    const capabilitySet = planCapabilityCache?.get(planName);
+    if (!capabilitySet) {
+      // Signal that we need this plan's data; fail-open (don't exclude) until loaded
+      onPlanDataNeeded?.(planName);
+      return true;
+    }
+    const matches = itemMatchesPlan(item, capabilitySet, byId);
+    return token.operator === '=' ? matches : !matches;
+  };
+
   // --- Free-text token matching ---
   const freeTextMatches = (item: RegionalAvailability, token: PropertyFilterToken): boolean => {
     const isNegation = token.operator.startsWith('!');
@@ -255,6 +359,9 @@ export function createFilteringFunction(
   const evaluateToken = (item: RegionalAvailability, token: PropertyFilterToken): boolean => {
     if (token.propertyKey === 'stack') {
       return evaluateStackToken(item, token);
+    }
+    if (token.propertyKey === 'plan') {
+      return evaluatePlanToken(item, token);
     }
     if (!token.propertyKey) {
       return freeTextMatches(item, token);
@@ -280,25 +387,25 @@ export function createFilteringFunction(
   };
 
   // --- Parent-chain inheritance ---
-  // When a query contains stack tokens, parent-chain inheritance is disabled entirely.
-  // Each row must pass itemMatchesStack on its own merits — the stack filtering already
-  // handles hierarchy (SERVICE matches if it has a matching child RT, PROPERTY matches
-  // if its parent RT matches, CONFIGURATION narrows by property values). Allowing
-  // parent-chain inheritance would override the precise narrowing (e.g., a matched
+  // When a query contains stack or plan tokens, parent-chain inheritance is disabled entirely.
+  // Each row must pass itemMatchesStack/itemMatchesPlan on its own merits — the stack/plan
+  // filtering already handles hierarchy (SERVICE matches if it has a matching child RT,
+  // PROPERTY matches if its parent RT matches, CONFIGURATION narrows by property values).
+  // Allowing parent-chain inheritance would override the precise narrowing (e.g., a matched
   // resource type row would pull in ALL its config children, defeating property narrowing).
   //
-  // For non-stack queries, parent-chain inheritance works as before: if a parent matches
+  // For non-stack/plan queries, parent-chain inheritance works as before: if a parent matches
   // the query, its children are included.
   let lastQuery: PropertyFilterQuery | null = null;
   const matchedIds = new Set<string>();
-  let hasStackTokens = false;
+  let hasHierarchicalTokens = false;
 
-  /** Check if a query contains any stack tokens (at any nesting depth). */
-  const queryHasStackTokens = (tokenOrGroup: PropertyFilterToken | PropertyFilterTokenGroup): boolean => {
+  /** Check if a query contains any stack or plan tokens (at any nesting depth). */
+  const queryHasHierarchicalTokens = (tokenOrGroup: PropertyFilterToken | PropertyFilterTokenGroup): boolean => {
     if (isTokenGroup(tokenOrGroup)) {
-      return tokenOrGroup.tokens.some(child => queryHasStackTokens(child));
+      return tokenOrGroup.tokens.some(child => queryHasHierarchicalTokens(child));
     }
-    return tokenOrGroup.propertyKey === 'stack';
+    return tokenOrGroup.propertyKey === 'stack' || tokenOrGroup.propertyKey === 'plan';
   };
 
   return (item: RegionalAvailability, query: PropertyFilterQuery): boolean => {
@@ -310,7 +417,7 @@ export function createFilteringFunction(
         operation: query.operation,
         tokens: query.tokenGroups ?? query.tokens,
       };
-      hasStackTokens = queryHasStackTokens(rootGroup);
+      hasHierarchicalTokens = queryHasHierarchicalTokens(rootGroup);
     }
 
     // Build the root token group from the query
@@ -326,10 +433,10 @@ export function createFilteringFunction(
     }
 
     // Parent-chain inheritance: include child if an ancestor genuinely matches.
-    // DISABLED when the query contains stack tokens — stack filtering handles
-    // its own hierarchy via itemMatchesStack, and inheritance would override
+    // DISABLED when the query contains stack or plan tokens — stack/plan filtering handles
+    // its own hierarchy via itemMatchesStack/itemMatchesPlan, and inheritance would override
     // the precise property-value narrowing.
-    if (!hasStackTokens) {
+    if (!hasHierarchicalTokens) {
       let current = item.parentId ? byId.get(item.parentId) : undefined;
       while (current) {
         if (matchedIds.has(current.id)) return true;

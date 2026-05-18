@@ -36,6 +36,10 @@ Examples:
   # Interactive — prompts for any missing parameters
   $0 deploy
 
+  # Use deploy-config.yaml to pre-fill values (skips prompts for populated fields)
+  # Edit deployment/deploy-config.yaml and then:
+  $0 deploy
+
   $0 teardown
 
 EOF
@@ -45,6 +49,33 @@ EOF
 get_account_and_region() {
   ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
   REGION=$(aws configure get region || echo "us-east-1")
+}
+
+load_config() {
+  local config_file="$SCRIPT_DIR/deploy-config.yaml"
+  if [[ -f "$config_file" ]]; then
+    echo "  Loading config from deploy-config.yaml"
+    while IFS= read -r line; do
+      # Skip comments and blank lines
+      [[ "$line" =~ ^[[:space:]]*# ]] && continue
+      [[ -z "${line// }" ]] && continue
+      # Parse key: value
+      local key value
+      key=$(echo "$line" | sed 's/^\([^:]*\):.*/\1/' | xargs)
+      value=$(echo "$line" | sed 's/^[^:]*:[[:space:]]*//' | xargs)
+      [[ -z "$value" ]] && continue
+      case "$key" in
+        private_vpc_id)              CONFIG_PRIVATE_VPC_ID="$value" ;;
+        backend_subnet_id)           CONFIG_BACKEND_SUBNET_ID="$value" ;;
+        api_access_subnet_id)        CONFIG_API_ACCESS_SUBNET_ID="$value" ;;
+        deployment_assets_bucket_name) CONFIG_DEPLOYMENT_ASSETS_BUCKET_NAME="$value" ;;
+        source_access_point_arn)     CONFIG_SOURCE_ACCESS_POINT_ARN="$value" ;;
+        source_folders)              CONFIG_SOURCE_FOLDERS="$value" ;;
+        enable_usage_analysis)       CONFIG_ENABLE_USAGE_ANALYSIS="$value" ;;
+        cloudtrail_bucket)           CONFIG_CLOUDTRAIL_BUCKET="$value" ;;
+      esac
+    done < "$config_file"
+  fi
 }
 
 prompt_if_empty() {
@@ -77,6 +108,19 @@ cmd_deploy() {
 
   echo "── Capability Insights — Deploy ──"
   echo ""
+
+  # Load config file values for anything not already set via CLI flags
+  load_config
+  [[ -z "$private_vpc_id" ]]              && private_vpc_id="${CONFIG_PRIVATE_VPC_ID:-}"
+  [[ -z "$backend_subnet_id" ]]           && backend_subnet_id="${CONFIG_BACKEND_SUBNET_ID:-}"
+  [[ -z "$api_access_subnet_id" ]]        && api_access_subnet_id="${CONFIG_API_ACCESS_SUBNET_ID:-}"
+  [[ -z "$deployment_assets_bucket_name" ]] && deployment_assets_bucket_name="${CONFIG_DEPLOYMENT_ASSETS_BUCKET_NAME:-}"
+  [[ -z "$source_access_point_arn" ]]     && source_access_point_arn="${CONFIG_SOURCE_ACCESS_POINT_ARN:-}"
+  [[ -z "$source_folders" ]]              && source_folders="${CONFIG_SOURCE_FOLDERS:-}"
+  [[ -z "$cloudtrail_bucket" ]]           && cloudtrail_bucket="${CONFIG_CLOUDTRAIL_BUCKET:-}"
+  if [[ -z "$enable_usage_analysis" && "${CONFIG_ENABLE_USAGE_ANALYSIS:-}" == "true" ]]; then
+    enable_usage_analysis="true"
+  fi
 
   prompt_if_empty private_vpc_id "PrivateVpcId"
   prompt_if_empty backend_subnet_id "BackendSubnetId"

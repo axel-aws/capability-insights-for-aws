@@ -4,7 +4,34 @@ import type { ApiService } from '@capability-insights/shared/types/capability/ap
 import type { CfnResource } from '@capability-insights/shared/types/capability/cfn';
 import type { SyncMetadata } from '@capability-insights/shared/types/sync-metadata';
 import type { StackResourcesResponse } from '@capability-insights/shared/types/capability/stack';
+import type { TerraformOverlayData } from '@capability-insights/shared/types/terraform-overlay';
 import { s3Client } from './s3-client';
+
+export interface SyncSettingsResponse {
+  terraformOverlayEnabled: boolean;
+  dataSyncEnabled: boolean;
+  hasToken: boolean;
+  updatedAt: string;
+}
+
+export interface DataFileInfo {
+  name: string;
+  lastModified: string | null;
+  sizeBytes: number | null;
+}
+
+export interface DataFilesInfo {
+  files: DataFileInfo[];
+}
+
+export interface MergePreview {
+  mergeId: string;
+  fileName: string;
+  additions: number;
+  updates: number;
+  unchanged: number;
+  totalAfterMerge: number;
+}
 
 export enum DataFormat {
   JSON = 'json',
@@ -70,6 +97,14 @@ export class CapabilityInsightsClient {
     return await s3Client.fetchJson<SyncMetadata>('/data/sync-metadata.json');
   }
 
+  async listTerraformOverlay(): Promise<TerraformOverlayData | null> {
+    try {
+      return await s3Client.fetchJson<TerraformOverlayData>('/data/json/terraform_overlay.json');
+    } catch {
+      return null;
+    }
+  }
+
   async listStacks(): Promise<string[]> {
     const baseUrl = await this.getApiBaseUrl();
     const res = await fetch(`${baseUrl}/stacks`);
@@ -87,6 +122,92 @@ export class CapabilityInsightsClient {
     if (!res.ok) {
       const body = await res.json();
       throw new Error(body.message ?? `Failed to get stack resources: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async getSyncSettings(): Promise<SyncSettingsResponse> {
+    const baseUrl = await this.getApiBaseUrl();
+    const res = await fetch(`${baseUrl}/syncSettings`);
+    if (!res.ok) {
+      const body = await res.json();
+      throw new Error(body.error ?? `Failed to get sync settings: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async updateSyncSettings(settings: {
+    terraformOverlayEnabled: boolean;
+    dataSyncEnabled?: boolean;
+    githubToken?: string;
+  }): Promise<SyncSettingsResponse> {
+    const baseUrl = await this.getApiBaseUrl();
+    const res = await fetch(`${baseUrl}/syncSettings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings),
+    });
+    if (!res.ok) {
+      const body = await res.json();
+      throw new Error(body.error ?? `Failed to update sync settings: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async getDataFilesInfo(): Promise<DataFilesInfo> {
+    const baseUrl = await this.getApiBaseUrl();
+    const res = await fetch(`${baseUrl}/data/info`);
+    if (!res.ok) {
+      const body = await res.json();
+      throw new Error(body.error ?? `Failed to get data files info: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async uploadDataFile(
+    fileName: DataFile,
+    content: string,
+  ): Promise<{ success: boolean; lastModified: string }> {
+    const baseUrl = await this.getApiBaseUrl();
+    const res = await fetch(`${baseUrl}/data/upload`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileName, content }),
+    });
+    if (!res.ok) {
+      const body = await res.json();
+      throw new Error(body.error ?? `Failed to upload data file: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async previewMerge(fileName: DataFile, content: string): Promise<MergePreview> {
+    const baseUrl = await this.getApiBaseUrl();
+    const res = await fetch(`${baseUrl}/data/merge/preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileName, content }),
+    });
+    if (!res.ok) {
+      const body = await res.json();
+      throw new Error(body.error ?? `Failed to preview merge: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async commitMerge(
+    fileName: DataFile,
+    mergeId: string,
+  ): Promise<{ success: boolean; itemCount: number }> {
+    const baseUrl = await this.getApiBaseUrl();
+    const res = await fetch(`${baseUrl}/data/merge/commit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileName, mergeId }),
+    });
+    if (!res.ok) {
+      const body = await res.json();
+      throw new Error(body.error ?? `Failed to commit merge: ${res.status}`);
     }
     return res.json();
   }
