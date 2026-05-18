@@ -200,30 +200,53 @@ function itemMatchesStack(
 
 /**
  * Determines if a RegionalAvailability item matches a plan's capability set.
- * Matching logic varies by row type (tab context):
  *
- * - SERVICE (Services tab): matches if item.name is in capabilitySet.serviceNames
- * - FEATURE (Services tab): matches if parent service name is in capabilitySet.serviceNames
- * - SDK_SERVICE (API tab): matches if any child operation is in capabilitySet.apiOperations
- * - OPERATION (API tab): matches if item.name is in capabilitySet.apiOperations
- * - RESOURCE_TYPE (CFN tab): matches if item.name (or cfnName) is in capabilitySet.cfnResourceTypes
- * - PROPERTY (CFN tab): matches if parent resource type is in capabilitySet.cfnResourceTypes
+ * Uses the same matching approach as itemMatchesStack:
+ * - Builds a set of ServiceName::ResourceTypeName pairs from cfnResourceTypes
+ * - SERVICE: matches if any child resource type row is in the pair set
+ * - RESOURCE_TYPE: matches if "parentServiceName::ownName" is in the pair set
+ * - PROPERTY: matches if the parent resource type matches
+ * - CONFIGURATION: matches if the parent resource type matches
+ * - SDK_SERVICE (API tab): matches if any child operation is in apiOperations
+ * - OPERATION (API tab): matches if item.name is in apiOperations
  */
 export function itemMatchesPlan(
   item: RegionalAvailability,
   capabilitySet: CapabilitySet,
   byId: Map<string, RegionalAvailability>,
 ): boolean {
+  // Build a set of ServiceName::ResourceTypeName pairs from cfnResourceTypes
+  // e.g., "AWS::EC2::Instance" → "EC2::Instance"
+  const resourceTypeSet = new Set(
+    capabilitySet.cfnResourceTypes.map(t => {
+      const parts = t.split('::');
+      if (parts.length >= 3 && parts[0] === 'AWS') {
+        return `${parts[1]}::${parts.slice(2).join('::')}`;
+      }
+      return t;
+    })
+  );
+
   switch (item.regionalAvailabilityType) {
     case RegionalAvailabilityType.SERVICE: {
-      // CFN tab: match service name segment against capabilitySet.serviceNames
-      return capabilitySet.serviceNames.includes(item.name);
+      // Service matches if any child resource type is in the resource type set
+      for (const [, candidate] of byId) {
+        if (
+          candidate.parentId === item.id &&
+          candidate.regionalAvailabilityType === RegionalAvailabilityType.RESOURCE_TYPE
+        ) {
+          const resourceName = (candidate as { cfnName?: string }).cfnName ?? candidate.name;
+          const key = `${item.name}::${resourceName}`;
+          if (resourceTypeSet.has(key)) return true;
+        }
+      }
+      return false;
     }
     case RegionalAvailabilityType.FEATURE: {
-      // CFN tab: match if parent service name is in serviceNames
+      // Services tab: feature matches if parent service matches
       const parent = item.parentId ? byId.get(item.parentId) : undefined;
       if (!parent) return false;
-      return capabilitySet.serviceNames.includes(parent.name);
+      return itemMatchesPlan(parent, capabilitySet, byId);
     }
     case RegionalAvailabilityType.SDK_SERVICE: {
       // API tab: SDK Service matches if any child operation is in apiOperations
@@ -242,24 +265,30 @@ export function itemMatchesPlan(
       return capabilitySet.apiOperations.includes(item.name);
     }
     case RegionalAvailabilityType.RESOURCE_TYPE: {
-      // CFN tab: match resource type name against capabilitySet.cfnResourceTypes
+      // CFN tab: match using ServiceName::ResourceTypeName pair (same as stack)
+      const parent = item.parentId ? byId.get(item.parentId) : undefined;
       const resourceName = (item as { cfnName?: string }).cfnName ?? item.name;
-      return capabilitySet.cfnResourceTypes.includes(resourceName);
+      const key = `${parent?.name ?? ''}::${resourceName}`;
+      return resourceTypeSet.has(key);
     }
     case RegionalAvailabilityType.PROPERTY: {
-      // CFN tab: match if parent resource type is in cfnResourceTypes
+      // CFN tab: match if parent resource type matches
       const rtRow = item.parentId ? byId.get(item.parentId) : undefined;
       if (!rtRow) return false;
+      const serviceRow = rtRow.parentId ? byId.get(rtRow.parentId) : undefined;
       const resourceName = (rtRow as { cfnName?: string }).cfnName ?? rtRow.name;
-      return capabilitySet.cfnResourceTypes.includes(resourceName);
+      const key = `${serviceRow?.name ?? ''}::${resourceName}`;
+      return resourceTypeSet.has(key);
     }
     case RegionalAvailabilityType.CONFIGURATION: {
-      // CFN tab: match if parent resource type is in cfnResourceTypes (same as PROPERTY)
+      // CFN tab: match if parent resource type matches
       const propRow = item.parentId ? byId.get(item.parentId) : undefined;
       const rtRow = propRow?.parentId ? byId.get(propRow.parentId) : undefined;
       if (!rtRow) return false;
+      const serviceRow = rtRow.parentId ? byId.get(rtRow.parentId) : undefined;
       const resourceName = (rtRow as { cfnName?: string }).cfnName ?? rtRow.name;
-      return capabilitySet.cfnResourceTypes.includes(resourceName);
+      const key = `${serviceRow?.name ?? ''}::${resourceName}`;
+      return resourceTypeSet.has(key);
     }
     default:
       return false;
