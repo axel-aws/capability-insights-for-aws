@@ -166,8 +166,6 @@ export default function PlanDetailPage() {
   }
 
   if (loading) {
-
-  async function handleDelete() {
     return (
       <ContentLayout header={<Header variant="h1">Loading...</Header>}>
         <Box textAlign="center" padding="xxl">
