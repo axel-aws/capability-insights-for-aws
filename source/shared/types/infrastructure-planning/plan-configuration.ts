@@ -43,6 +43,13 @@ export interface CapabilitySet {
   serviceNames: string[];
   /** Mapping of terraform type → CFN type for types that have a mapping. */
   terraformToCfnMapping: Record<string, string>;
+  /** Property value matches extracted from the template (e.g., InstanceType: "t3.large"). */
+  propertyMatches?: Array<{
+    serviceName: string;
+    resourceTypeName: string;
+    propertyName: string;
+    value: string;
+  }>;
   /** Indicates whether the analysis was terminated early due to timeout. */
   partialResult?: {
     isPartial: boolean;

@@ -28,6 +28,8 @@ import { parsePythonFile } from './parsers/python-sdk-parser';
 import { parseTypeScriptFile } from './parsers/typescript-sdk-parser';
 import { classifyFile } from './parsers/repository-analyzer';
 import { TerraformMapper } from './terraform-mapper';
+import { parseResourceType } from '../../util/cfn-resource-parser';
+import * as yaml from 'js-yaml';
 import type {
   GitHubFetchRequest,
   GitHubFetchResponse,
@@ -146,12 +148,13 @@ export class PlanProcessor {
   /**
    * Processes a CloudFormation template.
    *
-   * Pipeline: validate size → decode base64 → parse → derive service names
+   * Pipeline: validate size → decode base64 → parse → extract property values → derive service names
    */
   private processCloudFormation(request: CreatePlanRequest): CapabilitySet {
     const content = this.decodeTemplateContent(request.templateContent);
     const cfnResourceTypes = parseCfnTemplate(content);
     const serviceNames = this.deriveServiceNames(cfnResourceTypes);
+    const propertyMatches = this.extractTemplatePropertyValues(content);
 
     return {
       cfnResourceTypes,
@@ -159,6 +162,7 @@ export class PlanProcessor {
       apiOperations: [],
       serviceNames,
       terraformToCfnMapping: {},
+      propertyMatches,
     };
   }
 
@@ -392,6 +396,58 @@ export class PlanProcessor {
     }
 
     return Array.from(serviceNames).sort();
+  }
+
+  /**
+   * Extracts all plain string property values from a CloudFormation template.
+   *
+   * For each resource in the template, extracts all top-level Properties that have
+   * string values (skipping intrinsic functions like !Ref, !Sub, etc.).
+   * This enables property-level filtering (e.g., InstanceType: "t3.large").
+   */
+  private extractTemplatePropertyValues(content: string): CapabilitySet['propertyMatches'] {
+    const matches: NonNullable<CapabilitySet['propertyMatches']> = [];
+
+    let template: Record<string, unknown>;
+    try {
+      template = JSON.parse(content);
+    } catch {
+      try {
+        template = yaml.load(content) as Record<string, unknown>;
+      } catch {
+        return matches;
+      }
+    }
+
+    const resources = template?.Resources as Record<string, Record<string, unknown>> | undefined;
+    if (!resources || typeof resources !== 'object') {
+      return matches;
+    }
+
+    for (const [, resourceDef] of Object.entries(resources)) {
+      if (!resourceDef || typeof resourceDef !== 'object') continue;
+      const resourceType = resourceDef.Type as string | undefined;
+      if (!resourceType) continue;
+
+      const parsed = parseResourceType(resourceType);
+      if (!parsed) continue;
+
+      const properties = resourceDef.Properties as Record<string, unknown> | undefined;
+      if (!properties || typeof properties !== 'object') continue;
+
+      for (const [propertyName, value] of Object.entries(properties)) {
+        if (typeof value === 'string') {
+          matches.push({
+            serviceName: parsed.serviceName,
+            resourceTypeName: parsed.resourceTypeName,
+            propertyName,
+            value,
+          });
+        }
+      }
+    }
+
+    return matches;
   }
 }
 
