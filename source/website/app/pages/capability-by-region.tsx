@@ -355,6 +355,7 @@ export default function CapabilityByRegion() {
                     </SpaceBetween>
                   )}
                   loading={loading}
+                  includePlanProperty
                 />
               ),
             },
@@ -401,6 +402,7 @@ export default function CapabilityByRegion() {
                         </SpaceBetween>
                       )}
                       loading={loading}
+                      includePlanProperty
                     />
                   ) : (
                     <AvailabilityTable
@@ -507,6 +509,7 @@ export default function CapabilityByRegion() {
                     }}
                     loading={loading}
                     includeStackProperty
+                    includePlanProperty
                   />
                 </SpaceBetween>
               ),
