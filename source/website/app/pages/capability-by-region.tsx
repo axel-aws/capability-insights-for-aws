@@ -401,6 +401,7 @@ export default function CapabilityByRegion() {
                         </SpaceBetween>
                       )}
                       loading={loading}
+                      includePlanProperty
                     />
                   ) : (
                     <AvailabilityTable
