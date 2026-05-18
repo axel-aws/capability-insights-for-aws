@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import ContentLayout from '@cloudscape-design/components/content-layout';
 import Header from '@cloudscape-design/components/header';
@@ -71,6 +71,7 @@ export default function PlanDetailPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!planId) return;
@@ -107,10 +108,36 @@ export default function PlanDetailPage() {
   }
 
   async function handleReprocess() {
-    if (!planId) return;
+    if (!planId || !plan) return;
+    // For GitHub plans, just reprocess (uses stored repositoryUrl)
+    if (plan.sourceType === 'github') {
+      setReprocessing(true);
+      try {
+        const result = await infrastructurePlanningClient.reprocessPlan(planId);
+        setPlan(result);
+        if (result.status === 'ready') {
+          loadCapabilitySet(planId);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to reprocess plan');
+      } finally {
+        setReprocessing(false);
+      }
+      return;
+    }
+    // For CFN/Terraform plans, trigger file picker
+    fileInputRef.current?.click();
+  }
+
+  async function handleFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file || !planId) return;
     setReprocessing(true);
+    setError(null);
     try {
-      const result = await infrastructurePlanningClient.reprocessPlan(planId);
+      const content = await file.arrayBuffer();
+      const base64 = btoa(String.fromCharCode(...new Uint8Array(content)));
+      const result = await infrastructurePlanningClient.reprocessPlan(planId, base64);
       setPlan(result);
       if (result.status === 'ready') {
         loadCapabilitySet(planId);
@@ -119,6 +146,8 @@ export default function PlanDetailPage() {
       setError(err instanceof Error ? err.message : 'Failed to reprocess plan');
     } finally {
       setReprocessing(false);
+      // Reset file input so the same file can be re-selected
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   }
 
@@ -136,12 +165,9 @@ export default function PlanDetailPage() {
     }
   }
 
-  function handleApplyAsFilter() {
-    if (!plan) return;
-    navigate(`/?plan=${encodeURIComponent(plan.planName)}`);
-  }
-
   if (loading) {
+
+  async function handleDelete() {
     return (
       <ContentLayout header={<Header variant="h1">Loading...</Header>}>
         <Box textAlign="center" padding="xxl">
@@ -184,12 +210,6 @@ export default function PlanDetailPage() {
           variant="h1"
           actions={
             <SpaceBetween direction="horizontal" size="xs">
-              <Button onClick={handleApplyAsFilter} disabled={plan.status !== 'ready'}>
-                Apply as filter
-              </Button>
-              <Button onClick={() => navigate(`/infrastructure-planning/${planId}/edit`)}>
-                Edit metadata
-              </Button>
               <Button
                 iconName="refresh"
                 loading={reprocessing}
@@ -416,6 +436,15 @@ export default function PlanDetailPage() {
           </Modal>
         )}
       </SpaceBetween>
+
+      {/* Hidden file input for re-process upload */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={plan.sourceType === 'terraform' ? '.tf' : '.yaml,.yml,.json'}
+        style={{ display: 'none' }}
+        onChange={handleFileSelected}
+      />
     </ContentLayout>
   );
 }
