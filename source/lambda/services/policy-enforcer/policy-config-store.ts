@@ -18,6 +18,11 @@ function deserializeFromItem(item: Record<string, unknown>): PolicyConfiguration
   return item as unknown as PolicyConfiguration;
 }
 
+/** Convert a PolicyConfiguration to a DynamoDB item format. */
+function serializeToItem(config: PolicyConfiguration): Record<string, unknown> {
+  return { ...config };
+}
+
 export class PolicyConfigStore {
   constructor(private tableName: string) {}
 
