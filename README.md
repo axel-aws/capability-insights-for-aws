@@ -14,6 +14,7 @@ Deploy a regional availability dashboard into your own AWS account, powered by d
 - [Accessing the Website](#accessing-the-website)
 - [User Guide](#user-guide)
 - [Architecture](#architecture)
+- [Documentation](#documentation)
 - [Development](#development)
 - [License](#license)
 
@@ -302,11 +303,22 @@ CDK application that defines the two CloudFormation stacks. We use CDK as a deve
 
 A React dashboard built with [Cloudscape Design System](https://cloudscape.design/) to visualize the capability data.
 
+## Documentation
+
+| Document                             | Description                                                                    |
+| ------------------------------------ | ------------------------------------------------------------------------------ |
+| [Architecture](docs/ARCHITECTURE.md) | System design, data flow, Lambda topology, and key subsystems                  |
+| [Methodology](docs/METHODOLOGY.md)   | How data mappings are derived, availability computation, and known limitations |
+| [API Reference](docs/API.md)         | REST API route table with request/response examples for all endpoints          |
+| [Data Model](docs/DATA_MODEL.md)     | JSON file shapes, TypeScript interfaces, and data transformations              |
+
 ## Development
 
 This repository contains two CloudFormation stacks. The Capability Insights stack is what users deploy into their existing infrastructure. The Sample Environment stack creates a VPC, subnets, EC2 instance, and deployment bucket that mimic a customer environment. Use it for local development and testing when you don't have an existing environment to deploy into.
 
 Since the dashboard is only accessible from within the VPC, the sample stack includes an EC2 instance that you can SSH into and use as a proxy to reach the dashboard from your machine. See [Accessing the Website from Your Machine](#accessing-the-website-from-your-machine) for a step-by-step guide.
+
+If you're adding a new feature, see the [Contributing a new feature](CONTRIBUTING.md#contributing-a-new-feature) checklist in the Contributing Guide for a step-by-step walkthrough.
 
 To get started, generate an SSH key pair and import it into EC2:
 

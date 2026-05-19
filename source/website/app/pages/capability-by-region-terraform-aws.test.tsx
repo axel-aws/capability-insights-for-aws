@@ -136,6 +136,15 @@ const mockSyncMetadata: SyncMetadata = {
 
 // --- Import the component under test (after mocks are set up) ---
 import CapabilityByRegion from './capability-by-region';
+import { HelpPanelProvider } from '~/contexts/help-panel-context';
+
+function renderWithProviders(ui: React.ReactElement) {
+  return render(
+    <HelpPanelProvider onToolsContentChange={() => {}} onToolsOpenChange={() => {}}>
+      {ui}
+    </HelpPanelProvider>
+  );
+}
 
 describe('CapabilityByRegion - Terraform AWS view integration', () => {
   beforeEach(() => {
@@ -155,7 +164,7 @@ describe('CapabilityByRegion - Terraform AWS view integration', () => {
   });
 
   async function renderAndNavigateToApiTab() {
-    render(<CapabilityByRegion />);
+    renderWithProviders(<CapabilityByRegion />);
 
     // Wait for data to load
     await waitFor(() => {
@@ -237,7 +246,7 @@ describe('CapabilityByRegion - Terraform AWS view integration', () => {
       // Make the fetch never resolve to keep loading state
       mockFetchJson.mockReturnValue(new Promise(() => {}));
 
-      render(<CapabilityByRegion />);
+      renderWithProviders(<CapabilityByRegion />);
 
       await waitFor(() => {
         expect(screen.getByText('Capability by Region')).toBeInTheDocument();
@@ -610,7 +619,7 @@ describe('CapabilityByRegion - Terraform AWS view integration', () => {
       // Make the s3Client fetch hang to simulate loading
       mockFetchJson.mockReturnValue(new Promise(() => {}));
 
-      render(<CapabilityByRegion />);
+      renderWithProviders(<CapabilityByRegion />);
 
       await waitFor(() => {
         expect(screen.getByText('Capability by Region')).toBeInTheDocument();

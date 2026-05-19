@@ -86,6 +86,15 @@ const mockSyncMetadata: SyncMetadata = {
 
 // --- Import the component under test (after mocks are set up) ---
 import CapabilityByRegion from './capability-by-region';
+import { HelpPanelProvider } from '~/contexts/help-panel-context';
+
+function renderWithProviders(ui: React.ReactElement) {
+  return render(
+    <HelpPanelProvider onToolsContentChange={() => {}} onToolsOpenChange={() => {}}>
+      {ui}
+    </HelpPanelProvider>
+  );
+}
 
 describe('CapabilityByRegion page with overlay integration', () => {
   beforeEach(() => {
@@ -101,7 +110,7 @@ describe('CapabilityByRegion page with overlay integration', () => {
 
   describe('View Selector rendering - Requirement 5.1', () => {
     it('calls listTerraformOverlay to fetch overlay data', async () => {
-      render(<CapabilityByRegion />);
+      renderWithProviders(<CapabilityByRegion />);
 
       await waitFor(() => {
         expect(mockListTerraformOverlay).toHaveBeenCalled();
@@ -109,7 +118,7 @@ describe('CapabilityByRegion page with overlay integration', () => {
     });
 
     it('renders the page with CloudFormation tab', async () => {
-      render(<CapabilityByRegion />);
+      renderWithProviders(<CapabilityByRegion />);
 
       await waitFor(() => {
         expect(screen.getByText('Capability by Region')).toBeInTheDocument();
@@ -126,7 +135,7 @@ describe('CapabilityByRegion page with overlay integration', () => {
     it('shows error notification when overlay fails to load', async () => {
       mockListTerraformOverlay.mockResolvedValue(null);
 
-      render(<CapabilityByRegion />);
+      renderWithProviders(<CapabilityByRegion />);
 
       // Navigate to CFN tab
       await waitFor(() => {
@@ -149,7 +158,7 @@ describe('CapabilityByRegion page with overlay integration', () => {
     it('still displays CloudFormation names when overlay fails', async () => {
       mockListTerraformOverlay.mockResolvedValue(null);
 
-      render(<CapabilityByRegion />);
+      renderWithProviders(<CapabilityByRegion />);
 
       await waitFor(() => {
         const tabs = screen.getAllByRole('tab');

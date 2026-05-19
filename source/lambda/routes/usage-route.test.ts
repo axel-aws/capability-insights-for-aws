@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { getUsedCapabilities } from './routes/usage-route';
+import { getUsedCapabilities } from './usage-route';
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 
 const mockGetObject = vi.fn();
 const mockListObjects = vi.fn();
 
-vi.mock('./services/s3-client', () => ({
+vi.mock('../services/s3-client', () => ({
   S3BucketClient: vi.fn().mockImplementation(() => ({
     getObject: mockGetObject,
     listObjects: mockListObjects,

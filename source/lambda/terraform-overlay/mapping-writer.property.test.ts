@@ -13,7 +13,7 @@ const hexSha40Arb = fc.stringMatching(/^[0-9a-f]{40}$/);
 /**
  * Generator for a random ISO 8601 timestamp string.
  */
-const isoTimestampArb = fc.date({ min: new Date('2000-01-01'), max: new Date('2099-12-31') }).map((d) => d.toISOString());
+const isoTimestampArb = fc.date({ min: new Date('2000-01-01T00:00:00.000Z'), max: new Date('2099-12-31T23:59:59.999Z') }).map((d) => d.toISOString());
 
 /**
  * Generator for a non-negative integer (resource counts).

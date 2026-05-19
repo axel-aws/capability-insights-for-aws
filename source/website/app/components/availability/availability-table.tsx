@@ -49,6 +49,8 @@ interface AvailabilityTableProps<T extends RegionalAvailability> {
    * It receives the item and the property filter query, and returns true if the item should be shown.
    */
   customFilteringFunction?: (item: T, query: PropertyFilterQuery) => boolean;
+  /** Optional additional actions to render in the table header alongside the default actions. */
+  headerActions?: React.ReactNode;
 }
 
 export default function AvailabilityTable<T extends RegionalAvailability>({
@@ -64,6 +66,7 @@ export default function AvailabilityTable<T extends RegionalAvailability>({
   initialQuery,
   availabilityCell,
   customFilteringFunction,
+  headerActions,
 }: AvailabilityTableProps<T>) {
   const [preferences, setPreferences] = useState<CollectionPreferencesProps.Preferences>({
     stickyColumns: { first: 1, last: 0 },
@@ -365,6 +368,7 @@ export default function AvailabilityTable<T extends RegionalAvailability>({
             counter={`(${filteredItemsCount})`}
             actions={
               <SpaceBetween direction="horizontal" size="xs">
+                {headerActions}
                 {hasNesting && (
                   <Button
                     iconName={allExpanded ? 'treeview-collapse' : 'treeview-expand'}

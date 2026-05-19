@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback, type ReactNode } from 'react';
 import { useMatches } from 'react-router';
 import type { RouteHandle } from '~/types/route';
 import TopNavigation from '@cloudscape-design/components/top-navigation';
@@ -14,14 +14,25 @@ import {
   AWS_CAPABILITY_EXTERNAL,
   AWS_CAPABILITY_EXTERNAL_URL,
 } from '~/constants/app';
+import { HelpPanelProvider } from '~/contexts/help-panel-context';
 import HelpMenu from './help-menu';
 import Footer from './footer';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const [navOpen, setNavOpen] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [toolsContent, setToolsContent] = useState<ReactNode>(<HelpMenu />);
   const pageName = (useMatches().at(-1)?.handle as RouteHandle)?.pageName ?? '';
+
+  const handleToolsContentChange = useCallback((content: ReactNode) => {
+    setToolsContent(content);
+  }, []);
+
+  const handleToolsOpenChange = useCallback((open: boolean) => {
+    setToolsOpen(open);
+  }, []);
   return (
-    <>
+    <HelpPanelProvider onToolsContentChange={handleToolsContentChange} onToolsOpenChange={handleToolsOpenChange}>
       <div id="top-nav">
         <TopNavigation
           identity={{
@@ -42,6 +53,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         maxContentWidth={Number.MAX_VALUE}
         navigationOpen={navOpen}
         onNavigationChange={({ detail }) => setNavOpen(detail.open)}
+        toolsOpen={toolsOpen}
+        onToolsChange={({ detail }) => setToolsOpen(detail.open)}
         breadcrumbs={
           <BreadcrumbGroup
             items={[
@@ -68,7 +81,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             ]}
           />
         }
-        tools={<HelpMenu />}
+        tools={toolsContent}
         content={
           <>
             {children}
@@ -76,6 +89,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </>
         }
       />
-    </>
+    </HelpPanelProvider>
   );
 }
