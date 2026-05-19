@@ -5,7 +5,9 @@
     "inlineSourceMap": true,
     "inlineSources": true,
     "experimentalDecorators": true,
-    "rootDir": "."
+    "rootDir": ".",
+    "moduleResolution": "node",
+    "module": "commonjs"
   },
   "exclude": ["cdk.out", "build", "node_modules", "dist"]
 }
