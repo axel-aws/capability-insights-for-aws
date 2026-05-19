@@ -13,6 +13,8 @@ import {
   PAGE_SETTINGS,
   AWS_CAPABILITY_EXTERNAL,
   AWS_CAPABILITY_EXTERNAL_URL,
+  FEEDBACK_EXTERNAL,
+  FEEDBACK_EXTERNAL_URL,
 } from '~/constants/app';
 import { HelpPanelProvider } from '~/contexts/help-panel-context';
 import HelpMenu from './help-menu';
@@ -44,6 +46,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               type: 'button',
               text: AWS_CAPABILITY_EXTERNAL,
               href: AWS_CAPABILITY_EXTERNAL_URL,
+              external: true,
+            },
+            {
+              type: 'button',
+              text: FEEDBACK_EXTERNAL,
+              href: FEEDBACK_EXTERNAL_URL,
               external: true,
             },
           ]}

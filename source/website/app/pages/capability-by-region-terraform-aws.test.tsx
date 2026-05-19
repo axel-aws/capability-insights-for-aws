@@ -168,7 +168,7 @@ describe('CapabilityByRegion - Terraform AWS view integration', () => {
 
     // Wait for data to load
     await waitFor(() => {
-      expect(screen.getByText('Capability by Region')).toBeInTheDocument();
+      expect(screen.getByText('Capabilities by Region')).toBeInTheDocument();
     });
 
     // Click the API operations tab
@@ -249,7 +249,7 @@ describe('CapabilityByRegion - Terraform AWS view integration', () => {
       renderWithProviders(<CapabilityByRegion />);
 
       await waitFor(() => {
-        expect(screen.getByText('Capability by Region')).toBeInTheDocument();
+        expect(screen.getByText('Capabilities by Region')).toBeInTheDocument();
       });
 
       // Navigate to API tab
@@ -622,7 +622,7 @@ describe('CapabilityByRegion - Terraform AWS view integration', () => {
       renderWithProviders(<CapabilityByRegion />);
 
       await waitFor(() => {
-        expect(screen.getByText('Capability by Region')).toBeInTheDocument();
+        expect(screen.getByText('Capabilities by Region')).toBeInTheDocument();
       });
 
       // Navigate to API tab

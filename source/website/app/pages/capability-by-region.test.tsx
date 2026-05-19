@@ -121,7 +121,7 @@ describe('CapabilityByRegion page with overlay integration', () => {
       renderWithProviders(<CapabilityByRegion />);
 
       await waitFor(() => {
-        expect(screen.getByText('Capability by Region')).toBeInTheDocument();
+        expect(screen.getByText('Capabilities by Region')).toBeInTheDocument();
       });
 
       // The CFN tab should be present
