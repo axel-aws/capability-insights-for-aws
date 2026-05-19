@@ -4,6 +4,7 @@ import { S3BucketClient } from '../services/s3-client';
 import { EnvironmentKey, getEnv } from '../constants/environment';
 import { StatusCode } from '../constants/status-codes';
 import { corsHeaders } from '../types/api';
+import { buildResponse } from '../util/route-helpers';
 import { ContentType, FileFormat } from '../constants/file-formats';
 import { mergeJson, ChildMergeConfig } from '../data-fetch/merge/merge-json';
 import { logger } from '../util/logger';
@@ -59,14 +60,6 @@ const DATA_FILE_CONFIGS: Record<DataFile, DataFileConfig> = {
 };
 
 const s3Client = new S3Client({});
-
-function buildResponse(statusCode: number, body: unknown): APIGatewayProxyResult {
-  return {
-    statusCode,
-    headers: corsHeaders,
-    body: JSON.stringify(body),
-  };
-}
 
 function isAllowedFileName(name: string): name is DataFile {
   return ALLOWED_DATA_FILES.includes(name as DataFile);

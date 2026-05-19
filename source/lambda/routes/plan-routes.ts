@@ -14,21 +14,13 @@ import type {
   ListPlansQuery,
   PlanSourceType,
 } from '@capability-insights/shared/types/infrastructure-planning/plan-configuration';
+import { parseBody, mapPlanProcessingError } from '../util/route-helpers';
 import type { TerraformOverlayData } from '@capability-insights/shared/types/terraform-overlay';
 
 function getStore(): PlanStore {
   const tableName = getEnv(EnvironmentKey.PLAN_TABLE_NAME);
   const bucketName = getEnv(EnvironmentKey.WEBSITE_BUCKET_NAME);
   return new PlanStore(tableName, bucketName);
-}
-
-function parseBody(event: APIGatewayProxyEvent): unknown {
-  if (!event.body) return null;
-  try {
-    return JSON.parse(event.body);
-  } catch {
-    return null;
-  }
 }
 
 async function getOverlayData(): Promise<TerraformOverlayData> {
@@ -185,55 +177,8 @@ export const createPlanRoute = async (event: APIGatewayProxyEvent): Promise<APIG
       };
     }
 
-    if (message.includes('already exists')) {
-      return {
-        statusCode: StatusCode.CONFLICT,
-        headers: corsHeaders,
-        body: JSON.stringify({ error: 'Conflict', message }),
-      };
-    }
-
-    if (
-      message.includes('Failed to parse') ||
-      message.includes('No AWS resources found') ||
-      message.includes('Template exceeds maximum size') ||
-      message.includes('Template content is required') ||
-      message.includes('content is empty') ||
-      message.includes('Repository URL is required') ||
-      message.includes('Invalid GitHub repository URL') ||
-      message.includes('GitHub token not configured') ||
-      message.includes('GitHubFetchLambda function name not configured')
-    ) {
-      return {
-        statusCode: StatusCode.BAD_REQUEST,
-        headers: corsHeaders,
-        body: JSON.stringify({ error: 'ProcessingError', message }),
-      };
-    }
-
-    if (message.includes('GitHub token is invalid or expired')) {
-      return {
-        statusCode: StatusCode.UNAUTHORIZED,
-        headers: corsHeaders,
-        body: JSON.stringify({ error: 'Unauthorized', message }),
-      };
-    }
-
-    if (message.includes('Cannot access repository')) {
-      return {
-        statusCode: StatusCode.NOT_FOUND,
-        headers: corsHeaders,
-        body: JSON.stringify({ error: 'NotFound', message }),
-      };
-    }
-
-    if (message.includes('Failed to invoke GitHubFetchLambda')) {
-      return {
-        statusCode: StatusCode.INTERNAL_SERVER_ERROR,
-        headers: corsHeaders,
-        body: JSON.stringify({ error: 'LambdaInvocationError', message }),
-      };
-    }
+    const mapped = mapPlanProcessingError(message);
+    if (mapped) return mapped;
 
     logger.error('Failed to create plan', { error: message });
     return ErrorResponse.internalServerError(message);
@@ -544,46 +489,8 @@ export const reprocessPlanRoute = async (
       };
     }
 
-    if (
-      message.includes('Failed to parse') ||
-      message.includes('No AWS resources found') ||
-      message.includes('Template exceeds maximum size') ||
-      message.includes('Template content is required') ||
-      message.includes('content is empty') ||
-      message.includes('Invalid GitHub repository URL') ||
-      message.includes('GitHub token not configured') ||
-      message.includes('GitHubFetchLambda function name not configured')
-    ) {
-      return {
-        statusCode: StatusCode.BAD_REQUEST,
-        headers: corsHeaders,
-        body: JSON.stringify({ error: 'ProcessingError', message }),
-      };
-    }
-
-    if (message.includes('GitHub token is invalid or expired')) {
-      return {
-        statusCode: StatusCode.UNAUTHORIZED,
-        headers: corsHeaders,
-        body: JSON.stringify({ error: 'Unauthorized', message }),
-      };
-    }
-
-    if (message.includes('Cannot access repository')) {
-      return {
-        statusCode: StatusCode.NOT_FOUND,
-        headers: corsHeaders,
-        body: JSON.stringify({ error: 'NotFound', message }),
-      };
-    }
-
-    if (message.includes('Failed to invoke GitHubFetchLambda')) {
-      return {
-        statusCode: StatusCode.INTERNAL_SERVER_ERROR,
-        headers: corsHeaders,
-        body: JSON.stringify({ error: 'LambdaInvocationError', message }),
-      };
-    }
+    const mapped = mapPlanProcessingError(message);
+    if (mapped) return mapped;
 
     logger.error('Failed to reprocess plan', { planId, error: message });
     return ErrorResponse.internalServerError(message);

@@ -1,6 +1,4 @@
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
-  DynamoDBDocumentClient,
   PutCommand,
   GetCommand,
   ScanCommand,
@@ -9,6 +7,7 @@ import {
   QueryCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { S3Client, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { docClient, buildUpdateExpression } from '../dynamo-client';
 import { S3BucketClient } from '../s3-client';
 import { logger } from '../../util/logger';
 import type {
@@ -20,8 +19,6 @@ import type {
   PlanNamesResponse,
 } from '@capability-insights/shared/types/infrastructure-planning/plan-configuration';
 
-const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const s3Client = new S3Client({});
 
 /** The GSI name used for plan name uniqueness enforcement and lookups. */
@@ -241,22 +238,8 @@ export class PlanStore {
     if (updates.planName !== undefined) fields.planName = updates.planName;
     if (updates.labels !== undefined) fields.labels = updates.labels;
 
-    const expressionParts: string[] = [];
-    const expressionValues: Record<string, unknown> = {};
-    const expressionNames: Record<string, string> = {};
-
-    let index = 0;
-    for (const [key, value] of Object.entries(fields)) {
-      if (value === undefined) continue;
-      const attrAlias = `#attr${index}`;
-      const valAlias = `:val${index}`;
-      expressionParts.push(`${attrAlias} = ${valAlias}`);
-      expressionNames[attrAlias] = key;
-      expressionValues[valAlias] = value;
-      index++;
-    }
-
-    if (expressionParts.length === 0) {
+    const expr = buildUpdateExpression(fields);
+    if (!expr) {
       throw new Error(`No valid fields to update for plan "${planId}"`);
     }
 
@@ -265,9 +248,7 @@ export class PlanStore {
         new UpdateCommand({
           TableName: this.tableName,
           Key: { planId },
-          UpdateExpression: `SET ${expressionParts.join(', ')}`,
-          ExpressionAttributeNames: expressionNames,
-          ExpressionAttributeValues: expressionValues,
+          ...expr,
           ConditionExpression: 'attribute_exists(planId)',
           ReturnValues: 'ALL_NEW',
         }),

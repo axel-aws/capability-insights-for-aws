@@ -1,5 +1,5 @@
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { docClient } from './dynamo-client';
 import { logger } from '../util/logger';
 
 export const SYNC_SETTINGS_POLICY_ID = 'SYNC_SETTINGS';
@@ -16,9 +16,6 @@ export interface SyncSettingsResponse {
   dataSyncEnabled: boolean;
   updatedAt: string;
 }
-
-const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
 export class SyncSettingsStore {
   constructor(private tableName: string) {}

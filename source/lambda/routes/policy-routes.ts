@@ -17,6 +17,7 @@ import type {
   PolicyStatus,
 } from '@capability-insights/shared/types/policy-enforcer/policy-configuration';
 import type { ApiService } from '@capability-insights/shared/types/capability/api';
+import { parseBody } from '../util/route-helpers';
 
 const lambdaClient = new LambdaClient({});
 
@@ -33,15 +34,6 @@ async function invokeIAMHelper(payload: Record<string, unknown>): Promise<{ succ
 function getStore(): PolicyConfigStore {
   const tableName = getEnv(EnvironmentKey.POLICY_TABLE_NAME);
   return new PolicyConfigStore(tableName);
-}
-
-function parseBody(event: APIGatewayProxyEvent): unknown {
-  if (!event.body) return null;
-  try {
-    return JSON.parse(event.body);
-  } catch {
-    return null;
-  }
 }
 
 async function fetchCatalogData(): Promise<ApiService[]> {

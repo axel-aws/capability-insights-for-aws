@@ -1,12 +1,11 @@
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
-  DynamoDBDocumentClient,
   PutCommand,
   GetCommand,
   ScanCommand,
   UpdateCommand,
   DeleteCommand,
 } from '@aws-sdk/lib-dynamodb';
+import { docClient, buildUpdateExpression } from '../dynamo-client';
 import { logger } from '../../util/logger';
 import type {
   PolicyConfiguration,
@@ -14,16 +13,8 @@ import type {
   ListPoliciesQuery,
 } from '@capability-insights/shared/types/policy-enforcer/policy-configuration';
 
-const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
-
-/** Convert a PolicyConfiguration to a DynamoDB item format. */
-export function serializeToItem(config: PolicyConfiguration): Record<string, unknown> {
-  return { ...config };
-}
-
 /** Convert a DynamoDB item to a PolicyConfiguration. */
-export function deserializeFromItem(item: Record<string, unknown>): PolicyConfiguration {
+function deserializeFromItem(item: Record<string, unknown>): PolicyConfiguration {
   return item as unknown as PolicyConfiguration;
 }
 
@@ -157,22 +148,8 @@ export class PolicyConfigStore {
     const { policyId: _id, createdAt: _created, ...allowedUpdates } = updates as Record<string, unknown>;
     const fields = { ...allowedUpdates, updatedAt: new Date().toISOString() };
 
-    const expressionParts: string[] = [];
-    const expressionValues: Record<string, unknown> = {};
-    const expressionNames: Record<string, string> = {};
-
-    let index = 0;
-    for (const [key, value] of Object.entries(fields)) {
-      if (value === undefined) continue;
-      const attrAlias = `#attr${index}`;
-      const valAlias = `:val${index}`;
-      expressionParts.push(`${attrAlias} = ${valAlias}`);
-      expressionNames[attrAlias] = key;
-      expressionValues[valAlias] = value;
-      index++;
-    }
-
-    if (expressionParts.length === 0) {
+    const expr = buildUpdateExpression(fields);
+    if (!expr) {
       throw new Error(`No valid fields to update for policy "${policyId}"`);
     }
 
@@ -181,9 +158,7 @@ export class PolicyConfigStore {
         new UpdateCommand({
           TableName: this.tableName,
           Key: { policyId },
-          UpdateExpression: `SET ${expressionParts.join(', ')}`,
-          ExpressionAttributeNames: expressionNames,
-          ExpressionAttributeValues: expressionValues,
+          ...expr,
           ConditionExpression: 'attribute_exists(policyId)',
           ReturnValues: 'ALL_NEW',
         }),

@@ -6,6 +6,7 @@ import type { SyncMetadata } from '@capability-insights/shared/types/sync-metada
 import type { StackResourcesResponse } from '@capability-insights/shared/types/capability/stack';
 import type { TerraformOverlayData } from '@capability-insights/shared/types/terraform-overlay';
 import { s3Client } from './s3-client';
+import { BaseApiClient } from './base-api-client';
 
 export interface SyncSettingsResponse {
   terraformOverlayEnabled: boolean;
@@ -50,18 +51,9 @@ export interface ExportUrls {
   csv: string;
 }
 
-export class CapabilityInsightsClient {
-  private cachedBaseUrl: string | null = null;
-
+export class CapabilityInsightsClient extends BaseApiClient {
   private getDataUrl(name: DataFile, format: DataFormat): string {
     return `/data/${format}/${name}.${format}`;
-  }
-
-  private async getApiBaseUrl(): Promise<string> {
-    if (this.cachedBaseUrl) return this.cachedBaseUrl;
-    const config = await s3Client.fetchJson<{ apiBaseUrl: string }>('/api-config.json');
-    this.cachedBaseUrl = config.apiBaseUrl;
-    return this.cachedBaseUrl;
   }
 
   exportUrls(name: DataFile): ExportUrls {
@@ -72,9 +64,7 @@ export class CapabilityInsightsClient {
   }
 
   async syncCapabilityData(): Promise<void> {
-    const baseUrl = await this.getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/syncCapabilityData`, { method: 'POST' });
-    if (!res.ok) throw new Error(`Sync request failed: ${res.status}`);
+    await this.post('/syncCapabilityData', {});
   }
 
   async listRegions(): Promise<Region[]> {
@@ -106,34 +96,16 @@ export class CapabilityInsightsClient {
   }
 
   async listStacks(): Promise<string[]> {
-    const baseUrl = await this.getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/stacks`);
-    if (!res.ok) {
-      const body = await res.json();
-      throw new Error(body.message ?? `Failed to list stacks: ${res.status}`);
-    }
-    const data = await res.json();
+    const data = await this.get<{ stacks: string[] }>('/stacks');
     return data.stacks;
   }
 
   async getStackResourceTypes(stackName: string): Promise<StackResourcesResponse> {
-    const baseUrl = await this.getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/stacks/${encodeURIComponent(stackName)}/resources`);
-    if (!res.ok) {
-      const body = await res.json();
-      throw new Error(body.message ?? `Failed to get stack resources: ${res.status}`);
-    }
-    return res.json();
+    return this.get<StackResourcesResponse>(`/stacks/${encodeURIComponent(stackName)}/resources`);
   }
 
   async getSyncSettings(): Promise<SyncSettingsResponse> {
-    const baseUrl = await this.getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/syncSettings`);
-    if (!res.ok) {
-      const body = await res.json();
-      throw new Error(body.error ?? `Failed to get sync settings: ${res.status}`);
-    }
-    return res.json();
+    return this.get<SyncSettingsResponse>('/syncSettings');
   }
 
   async updateSyncSettings(settings: {
@@ -141,75 +113,23 @@ export class CapabilityInsightsClient {
     dataSyncEnabled?: boolean;
     githubToken?: string;
   }): Promise<SyncSettingsResponse> {
-    const baseUrl = await this.getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/syncSettings`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(settings),
-    });
-    if (!res.ok) {
-      const body = await res.json();
-      throw new Error(body.error ?? `Failed to update sync settings: ${res.status}`);
-    }
-    return res.json();
+    return this.put<SyncSettingsResponse>('/syncSettings', settings);
   }
 
   async getDataFilesInfo(): Promise<DataFilesInfo> {
-    const baseUrl = await this.getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/data/info`);
-    if (!res.ok) {
-      const body = await res.json();
-      throw new Error(body.error ?? `Failed to get data files info: ${res.status}`);
-    }
-    return res.json();
+    return this.get<DataFilesInfo>('/data/info');
   }
 
-  async uploadDataFile(
-    fileName: DataFile,
-    content: string,
-  ): Promise<{ success: boolean; lastModified: string }> {
-    const baseUrl = await this.getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/data/upload`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fileName, content }),
-    });
-    if (!res.ok) {
-      const body = await res.json();
-      throw new Error(body.error ?? `Failed to upload data file: ${res.status}`);
-    }
-    return res.json();
+  async uploadDataFile(fileName: DataFile, content: string): Promise<{ success: boolean; lastModified: string }> {
+    return this.post('/data/upload', { fileName, content });
   }
 
   async previewMerge(fileName: DataFile, content: string): Promise<MergePreview> {
-    const baseUrl = await this.getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/data/merge/preview`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fileName, content }),
-    });
-    if (!res.ok) {
-      const body = await res.json();
-      throw new Error(body.error ?? `Failed to preview merge: ${res.status}`);
-    }
-    return res.json();
+    return this.post<MergePreview>('/data/merge/preview', { fileName, content });
   }
 
-  async commitMerge(
-    fileName: DataFile,
-    mergeId: string,
-  ): Promise<{ success: boolean; itemCount: number }> {
-    const baseUrl = await this.getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/data/merge/commit`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fileName, mergeId }),
-    });
-    if (!res.ok) {
-      const body = await res.json();
-      throw new Error(body.error ?? `Failed to commit merge: ${res.status}`);
-    }
-    return res.json();
+  async commitMerge(fileName: DataFile, mergeId: string): Promise<{ success: boolean; itemCount: number }> {
+    return this.post('/data/merge/commit', { fileName, mergeId });
   }
 }
 

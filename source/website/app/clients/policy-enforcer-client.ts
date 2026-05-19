@@ -7,159 +7,67 @@ import type {
   PolicyPartDetailResponse,
   CascadingDeleteResponse,
 } from '@capability-insights/shared/types/policy-enforcer/policy-configuration';
-import { s3Client } from './s3-client';
+import { BaseApiClient } from './base-api-client';
 
-export class PolicyEnforcerClient {
-  private cachedBaseUrl: string | null = null;
-
-  private async getApiBaseUrl(): Promise<string> {
-    if (this.cachedBaseUrl) return this.cachedBaseUrl;
-    const config = await s3Client.fetchJson<{ apiBaseUrl: string }>('/api-config.json');
-    this.cachedBaseUrl = config.apiBaseUrl;
-    return this.cachedBaseUrl;
-  }
-
+export class PolicyEnforcerClient extends BaseApiClient {
   async createPolicy(request: CreatePolicyRequest): Promise<PolicyConfiguration> {
-    const baseUrl = await this.getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/policies`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request),
-    });
-    if (!res.ok) {
-      const body = await res.json();
-      throw new Error(body.message ?? `Failed to create policy: ${res.status}`);
-    }
-    const data = await res.json();
+    const data = await this.post<{ policy: PolicyConfiguration }>('/policies', request);
     return data.policy;
   }
 
   async listPolicies(query?: ListPoliciesQuery): Promise<PolicyConfiguration[]> {
-    const baseUrl = await this.getApiBaseUrl();
     const params = new URLSearchParams();
     if (query?.tagKey) params.set('tagKey', query.tagKey);
     if (query?.tagValue) params.set('tagValue', query.tagValue);
     if (query?.status) params.set('status', query.status);
     if (query?.search) params.set('search', query.search);
-
-    const queryString = params.toString();
-    const url = queryString ? `${baseUrl}/policies?${queryString}` : `${baseUrl}/policies`;
-    const res = await fetch(url);
-    if (!res.ok) {
-      const body = await res.json();
-      throw new Error(body.message ?? `Failed to list policies: ${res.status}`);
-    }
-    const data = await res.json();
+    const qs = params.toString();
+    const data = await this.get<{ policies: PolicyConfiguration[] }>(qs ? `/policies?${qs}` : '/policies');
     return data.policies;
   }
 
   async getPolicy(policyId: string): Promise<PolicyConfiguration> {
-    const baseUrl = await this.getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/policies/${encodeURIComponent(policyId)}`);
-    if (!res.ok) {
-      const body = await res.json();
-      throw new Error(body.message ?? `Failed to get policy: ${res.status}`);
-    }
-    const data = await res.json();
+    const data = await this.get<{ policy: PolicyConfiguration }>(`/policies/${encodeURIComponent(policyId)}`);
     return data.policy;
   }
 
-  async updatePolicy(
-    policyId: string,
-    request: CreatePolicyRequest,
-  ): Promise<PolicyConfiguration> {
-    const baseUrl = await this.getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/policies/${encodeURIComponent(policyId)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request),
-    });
-    if (!res.ok) {
-      const body = await res.json();
-      throw new Error(body.message ?? `Failed to update policy: ${res.status}`);
-    }
-    const data = await res.json();
+  async updatePolicy(policyId: string, request: CreatePolicyRequest): Promise<PolicyConfiguration> {
+    const data = await this.put<{ policy: PolicyConfiguration }>(`/policies/${encodeURIComponent(policyId)}`, request);
     return data.policy;
   }
 
   async deletePolicy(policyId: string): Promise<CascadingDeleteResponse> {
-    const baseUrl = await this.getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/policies/${encodeURIComponent(policyId)}`, {
-      method: 'DELETE',
-    });
-    if (!res.ok) {
-      const body = await res.json();
-      throw new Error(body.message ?? `Failed to delete policy: ${res.status}`);
-    }
-    return res.json();
+    return this.del<CascadingDeleteResponse>(`/policies/${encodeURIComponent(policyId)}`);
   }
 
   async refreshPolicy(policyId: string): Promise<void> {
-    const baseUrl = await this.getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/policies/${encodeURIComponent(policyId)}/refresh`, {
-      method: 'POST',
-    });
-    if (!res.ok) {
-      const body = await res.json();
-      throw new Error(body.message ?? `Failed to refresh policy: ${res.status}`);
-    }
+    await this.post(`/policies/${encodeURIComponent(policyId)}/refresh`, {});
   }
 
   async previewPolicy(policyId: string): Promise<PreviewResponse> {
-    const baseUrl = await this.getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/policies/${encodeURIComponent(policyId)}/preview`);
-    if (!res.ok) {
-      const body = await res.json();
-      throw new Error(body.message ?? `Failed to preview policy: ${res.status}`);
-    }
-    return res.json();
+    return this.get<PreviewResponse>(`/policies/${encodeURIComponent(policyId)}/preview`);
   }
 
   async downloadTemplate(policyId: string): Promise<string> {
     const baseUrl = await this.getApiBaseUrl();
     const res = await fetch(`${baseUrl}/policies/${encodeURIComponent(policyId)}/template`);
     if (!res.ok) {
-      const body = await res.json();
-      throw new Error(body.message ?? `Failed to download template: ${res.status}`);
+      const body = await res.json().catch(() => ({}));
+      throw new Error((body as Record<string, unknown>).message as string ?? `Failed to download template: ${res.status}`);
     }
     return res.text();
   }
 
   async getPolicyParts(policyId: string): Promise<PolicyPartsResponse> {
-    const baseUrl = await this.getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/policies/${encodeURIComponent(policyId)}/parts`);
-    if (!res.ok) {
-      const body = await res.json();
-      throw new Error(body.message ?? `Failed to get policy parts: ${res.status}`);
-    }
-    return res.json();
+    return this.get<PolicyPartsResponse>(`/policies/${encodeURIComponent(policyId)}/parts`);
   }
 
-  async getPolicyPartDetail(
-    policyId: string,
-    partIndex: number,
-  ): Promise<PolicyPartDetailResponse> {
-    const baseUrl = await this.getApiBaseUrl();
-    const res = await fetch(
-      `${baseUrl}/policies/${encodeURIComponent(policyId)}/parts/${partIndex}`,
-    );
-    if (!res.ok) {
-      const body = await res.json();
-      throw new Error(body.message ?? `Failed to get policy part detail: ${res.status}`);
-    }
-    return res.json();
+  async getPolicyPartDetail(policyId: string, partIndex: number): Promise<PolicyPartDetailResponse> {
+    return this.get<PolicyPartDetailResponse>(`/policies/${encodeURIComponent(policyId)}/parts/${partIndex}`);
   }
 
   async deletePolicyPart(policyId: string, partIndex: number): Promise<void> {
-    const baseUrl = await this.getApiBaseUrl();
-    const res = await fetch(
-      `${baseUrl}/policies/${encodeURIComponent(policyId)}/parts/${partIndex}`,
-      { method: 'DELETE' },
-    );
-    if (!res.ok) {
-      const body = await res.json();
-      throw new Error(body.message ?? `Failed to delete policy part: ${res.status}`);
-    }
+    await this.del(`/policies/${encodeURIComponent(policyId)}/parts/${partIndex}`);
   }
 
   async refreshAllPolicies(policyIds: string[]): Promise<void> {
