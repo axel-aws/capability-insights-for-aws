@@ -12,9 +12,9 @@ Options:
   --port <number>    Local SOCKS proxy port (default: 8080)
 
 Examples:
-  $0 --profile waypoint_ncl
-  $0 --profile waypoint_ncl --port 9090
-  AWS_PROFILE=waypoint_ncl $0
+  $0
+  $0 --profile my-profile
+  $0 --port 9090
 
 EOF
   exit 1
