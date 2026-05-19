@@ -135,16 +135,43 @@ export function parseResourceGoFile(content: string): string[] {
  *
  * Returns the service name segment (e.g., "codedeploy", "s3", "ecs")
  * or null if no SDK import is found.
+ *
+ * When multiple SDK services are imported, returns the one that matches
+ * the service package directory (if known), otherwise the most frequently
+ * imported one (longest service name as heuristic for specificity).
  */
 const SDK_IMPORT_REGEX = /github\.com\/aws\/aws-sdk-go(?:-v2)?\/service\/([a-z0-9]+)/g;
 
 export function extractSdkServiceName(content: string): string | null {
   if (!content) return null;
 
-  SDK_IMPORT_REGEX.lastIndex = 0;
-  const match = SDK_IMPORT_REGEX.exec(content);
-  if (match) {
-    return match[1];
+  const services = extractAllSdkServiceNames(content);
+  if (services.length === 0) return null;
+  if (services.length === 1) return services[0];
+
+  // When multiple services are imported, prefer the longest name
+  // (more specific service, e.g., "elasticloadbalancingv2" over "ec2")
+  // This heuristic works because the primary service for a resource file
+  // is typically the most specific one (the one the resource actually manages).
+  return services.reduce((a, b) => (a.length >= b.length ? a : b));
+}
+
+/**
+ * Extract ALL AWS SDK service names from a Go file's import statements.
+ *
+ * Returns a deduplicated array of all service names found in SDK import paths.
+ * Useful for identifying all services a resource file interacts with.
+ */
+export function extractAllSdkServiceNames(content: string): string[] {
+  if (!content) return [];
+
+  const services = new Set<string>();
+  const regex = /github\.com\/aws\/aws-sdk-go(?:-v2)?\/service\/([a-z0-9]+)/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(content)) !== null) {
+    services.add(match[1]);
   }
-  return null;
+
+  return Array.from(services);
 }

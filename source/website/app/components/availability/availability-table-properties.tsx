@@ -199,6 +199,51 @@ function itemMatchesStack(
 }
 
 /**
+ * Determines if a RegionalAvailability item in the Terraform AWS tree matches
+ * a plan's capability set by checking against `terraformResourceTypes`.
+ *
+ * The Terraform AWS tree has a three-level hierarchy:
+ * - RESOURCE_TYPE (top-level): terraform resource name (e.g., "aws_alb")
+ * - SDK_SERVICE (child of resource): SDK service grouping
+ * - OPERATION (child of service): individual API operation
+ *
+ * Matching logic:
+ * - RESOURCE_TYPE: matches if item.name is in capabilitySet.terraformResourceTypes
+ * - SDK_SERVICE: matches if its parent resource matches
+ * - OPERATION: matches if its grandparent resource matches
+ */
+export function itemMatchesPlanTerraform(
+  item: RegionalAvailability,
+  capabilitySet: CapabilitySet,
+  byId: Map<string, RegionalAvailability>,
+): boolean {
+  const terraformTypeSet = new Set(capabilitySet.terraformResourceTypes);
+
+  switch (item.regionalAvailabilityType) {
+    case RegionalAvailabilityType.RESOURCE_TYPE: {
+      // Top-level resource: match directly against terraformResourceTypes
+      return terraformTypeSet.has(item.name);
+    }
+    case RegionalAvailabilityType.SDK_SERVICE: {
+      // SDK Service: matches if parent resource matches
+      const parent = item.parentId ? byId.get(item.parentId) : undefined;
+      if (!parent) return false;
+      return terraformTypeSet.has(parent.name);
+    }
+    case RegionalAvailabilityType.OPERATION: {
+      // Operation: matches if grandparent resource matches
+      const serviceRow = item.parentId ? byId.get(item.parentId) : undefined;
+      if (!serviceRow) return false;
+      const resourceRow = serviceRow.parentId ? byId.get(serviceRow.parentId) : undefined;
+      if (!resourceRow) return false;
+      return terraformTypeSet.has(resourceRow.name);
+    }
+    default:
+      return false;
+  }
+}
+
+/**
  * Determines if a RegionalAvailability item matches a plan's capability set.
  *
  * Uses the same matching approach as itemMatchesStack:

@@ -23,6 +23,7 @@ import {
   createColumns,
   createFilteringProperties,
   createFilteringFunction,
+  itemMatchesPlanTerraform,
   TablePreferences,
 } from './availability-table-properties';
 
@@ -198,16 +199,80 @@ export default function AvailabilityTable<T extends RegionalAvailability>({
   });
   const filteringProperties = createFilteringProperties(regions, { includeStackProperty, includePlanProperty });
   const filteringFunction = useMemo(
-    () =>
-      customFilteringFunction
-        ? (customFilteringFunction as (item: RegionalAvailability, query: PropertyFilterQuery) => boolean)
-        : createFilteringFunction(
-            regionalAvailability,
-            includeStackProperty ? stackResourceCache.current : undefined,
-            includeStackProperty ? onStackDataNeeded : undefined,
-            includePlanProperty ? planCapabilityCache.current : undefined,
-            includePlanProperty ? onPlanDataNeeded : undefined,
-          ),
+    () => {
+      if (customFilteringFunction && includePlanProperty) {
+        // Wrap the custom filtering function to also handle plan tokens.
+        // The custom function handles free-text and other property tokens;
+        // we intercept plan tokens and evaluate them using itemMatchesPlanTerraform.
+        const baseFn = customFilteringFunction as (item: RegionalAvailability, query: PropertyFilterQuery) => boolean;
+        const byId = new Map(regionalAvailability.map(i => [i.id, i]));
+
+        return (item: RegionalAvailability, query: PropertyFilterQuery): boolean => {
+          const tokens = query.tokenGroups ?? query.tokens;
+          if (!tokens || tokens.length === 0) return baseFn(item, query);
+
+          // Separate plan tokens from other tokens
+          type TokenType = (typeof tokens)[number];
+          const planTokens: Array<{ operator: string; value: string }> = [];
+          const otherTokens: TokenType[] = [];
+
+          for (const token of tokens) {
+            if ('operation' in token) {
+              otherTokens.push(token);
+            } else if (token.propertyKey === 'plan') {
+              planTokens.push({ operator: token.operator, value: token.value as string });
+            } else {
+              otherTokens.push(token);
+            }
+          }
+
+          // If no plan tokens, delegate entirely to the custom function
+          if (planTokens.length === 0) return baseFn(item, query);
+
+          // Evaluate plan tokens
+          const planPass = planTokens[query.operation === 'or' ? 'some' : 'every'](planToken => {
+            const planName = planToken.value;
+            const capabilitySet = planCapabilityCache.current.get(planName);
+            if (!capabilitySet) {
+              // Signal that we need this plan's data; fail-open until loaded
+              onPlanDataNeeded(planName);
+              return true;
+            }
+            const matches = itemMatchesPlanTerraform(item, capabilitySet, byId);
+            return planToken.operator === '=' ? matches : !matches;
+          });
+
+          // If there are no other tokens, just return plan result
+          if (otherTokens.length === 0) return planPass;
+
+          // Evaluate other tokens via the custom function (with plan tokens removed).
+          // The baseFn reads `query.tokenGroups ?? query.tokens`, so we set tokenGroups
+          // with the remaining tokens (which may include PropertyFilterTokenGroup objects).
+          const otherQuery: PropertyFilterQuery = {
+            operation: query.operation,
+            tokens: [] as unknown as PropertyFilterQuery['tokens'],
+            tokenGroups: otherTokens as unknown as PropertyFilterQuery['tokenGroups'],
+          };
+          const otherPass = baseFn(item, otherQuery);
+
+          // Combine results based on query operation
+          if (query.operation === 'and') return planPass && otherPass;
+          return planPass || otherPass;
+        };
+      }
+
+      if (customFilteringFunction) {
+        return customFilteringFunction as (item: RegionalAvailability, query: PropertyFilterQuery) => boolean;
+      }
+
+      return createFilteringFunction(
+        regionalAvailability,
+        includeStackProperty ? stackResourceCache.current : undefined,
+        includeStackProperty ? onStackDataNeeded : undefined,
+        includePlanProperty ? planCapabilityCache.current : undefined,
+        includePlanProperty ? onPlanDataNeeded : undefined,
+      );
+    },
     [regionalAvailability, includeStackProperty, includePlanProperty, onStackDataNeeded, onPlanDataNeeded, renderTick, customFilteringFunction],
   );
 

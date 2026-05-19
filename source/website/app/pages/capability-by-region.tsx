@@ -93,16 +93,17 @@ export default function CapabilityByRegion() {
 
     return (resourceRow: ApiAvailability, regionCode: string): string[] => {
       const missing: string[] = [];
-      const serviceName = resourceRow.sdkServiceName ?? '';
       // Get service children of the resource
       const serviceRows = childrenOf.get(resourceRow.id) ?? [];
       for (const serviceRow of serviceRows) {
+        // Use the service row's name (the actual SDK service) for the prefix
+        const svcName = serviceRow.sdkServiceName ?? serviceRow.name ?? '';
         // Get operation children of the service
         const operationRows = childrenOf.get(serviceRow.id) ?? [];
         for (const opRow of operationRows) {
           const status = opRow.regionalAvailability?.[regionCode];
           if (status === AvailabilityStatus.NOT_AVAILABLE) {
-            missing.push(`${serviceName}:${opRow.name}`);
+            missing.push(`${svcName}:${opRow.name}`);
           }
         }
       }
@@ -454,6 +455,7 @@ export default function CapabilityByRegion() {
                       }}
                       loading={classicApi.loading}
                       customFilteringFunction={terraformFilteringFunction}
+                      includePlanProperty
                     />
                   )}
                 </SpaceBetween>
