@@ -136,9 +136,19 @@ fi
 
 # Generate a temporary SSH key pair
 echo "── Starting SOCKS proxy on localhost:$LOCAL_PORT ──"
-TEMP_DIR=$(mktemp -d)
+TEMP_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t 'ci-browse')
 TEMP_KEY="$TEMP_DIR/ci-browse-key"
-ssh-keygen -t ed25519 -f "$TEMP_KEY" -N "" -q
+ssh-keygen -t ed25519 -f "$TEMP_KEY" -N "" -q || {
+  echo "Error: Failed to generate temporary SSH key."
+  exit 1
+}
+
+if [[ ! -f "${TEMP_KEY}.pub" ]]; then
+  echo "Error: SSH key was not created at ${TEMP_KEY}.pub"
+  echo "  Temp directory: $TEMP_DIR"
+  ls -la "$TEMP_DIR" 2>/dev/null || echo "  (directory listing failed)"
+  exit 1
+fi
 
 # Push the public key to the instance via EC2 Instance Connect (valid for 60s)
 echo "  Pushing temporary SSH key to instance..."
