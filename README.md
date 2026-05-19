@@ -53,7 +53,7 @@ The quickstart script deploys the full solution — sample VPC infrastructure an
 4. Triggers the initial data sync from the S3 access point
 5. Opens Chrome via an SSM SOCKS proxy so you can browse the dashboard
 
-**Prerequisites:** Node.js, AWS CLI (authenticated), and the [Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html).
+**Prerequisites:** Node.js, AWS CLI with a [named profile](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html) configured in `~/.aws/config`, and the [Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html).
 
 **Configure your data source** (one-time setup):
 
