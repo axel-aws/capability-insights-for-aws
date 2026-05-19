@@ -145,9 +145,8 @@ if port_in_use; then
     kill $(lsof -ti :"$LOCAL_PORT") 2>/dev/null || true
   elif command -v netstat &>/dev/null && command -v awk &>/dev/null; then
     # Windows/Git Bash: find PID from netstat and kill it
-    local pid
-    pid=$(netstat -ano 2>/dev/null | grep "[:.]${LOCAL_PORT} .*LISTEN" | awk '{print $NF}' | head -1)
-    [[ -n "$pid" ]] && kill "$pid" 2>/dev/null || true
+    local_pid=$(netstat -ano 2>/dev/null | grep "[:.]${LOCAL_PORT} .*LISTEN" | awk '{print $NF}' | head -1)
+    [[ -n "$local_pid" ]] && kill "$local_pid" 2>/dev/null || true
   fi
   sleep 1
 fi
