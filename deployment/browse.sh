@@ -140,9 +140,16 @@ port_in_use() {
 }
 
 if port_in_use; then
-  echo "── Port $LOCAL_PORT already in use ──"
-  echo "  Kill the existing process or use --port to pick a different one."
-  exit 1
+  echo "── Stopping existing proxy on port $LOCAL_PORT ──"
+  if command -v lsof &>/dev/null; then
+    kill $(lsof -ti :"$LOCAL_PORT") 2>/dev/null || true
+  elif command -v netstat &>/dev/null && command -v awk &>/dev/null; then
+    # Windows/Git Bash: find PID from netstat and kill it
+    local pid
+    pid=$(netstat -ano 2>/dev/null | grep "[:.]${LOCAL_PORT} .*LISTEN" | awk '{print $NF}' | head -1)
+    [[ -n "$pid" ]] && kill "$pid" 2>/dev/null || true
+  fi
+  sleep 1
 fi
 
 # Generate a temporary SSH key pair
