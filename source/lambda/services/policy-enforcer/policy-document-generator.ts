@@ -394,7 +394,41 @@ export function generatePolicyDocument(options: PolicyDocumentOptions): Generate
   }
 
   // IAM policy type — build documents
-  const documents: PolicyDocument[] = [blanketDenyDoc];
+  // Split the blanket deny document if it exceeds the size limit
+  const documents: PolicyDocument[] = [];
+  const blanketDenySize = getDocumentSize(blanketDenyDoc);
+
+  if (blanketDenySize <= IAM_SIZE_LIMIT) {
+    documents.push(blanketDenyDoc);
+  } else {
+    // Split NotAction entries across multiple blanket deny documents
+    let remaining = [...notActionEntries];
+    let partNum = 1;
+
+    while (remaining.length > 0) {
+      const sid = `${blanketDenySid}Part${partNum}`;
+      let low = 1;
+      let high = remaining.length;
+      let maxFit = 0;
+
+      while (low <= high) {
+        const mid = Math.floor((low + high) / 2);
+        const testDoc = buildBlanketDenyDocument(remaining.slice(0, mid), sid);
+        const size = getDocumentSize(testDoc);
+        if (size <= IAM_SIZE_LIMIT) {
+          maxFit = mid;
+          low = mid + 1;
+        } else {
+          high = mid - 1;
+        }
+      }
+
+      if (maxFit === 0) maxFit = 1;
+      documents.push(buildBlanketDenyDocument(remaining.slice(0, maxFit), sid));
+      remaining = remaining.slice(maxFit);
+      partNum++;
+    }
+  }
 
   // Bin-pack specific deny actions into additional documents
   if (uniqueSpecificDenyActions.length > 0) {
