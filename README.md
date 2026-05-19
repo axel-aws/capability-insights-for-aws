@@ -9,6 +9,7 @@ Deploy a regional availability dashboard into your own AWS account, powered by d
 ## Table of Contents
 
 - [Overview](#overview)
+- [Quick Start](#quick-start)
 - [Installation](#installation)
   - [Data Layer Onboarding](#data-layer-onboarding)
 - [Accessing the Website](#accessing-the-website)
@@ -39,6 +40,43 @@ The solution deploys entirely within your VPC so that all data remains within yo
 ![High-level architecture](docs/images/high-level-architecture.png)
 
 The solution deploys a static website, REST API, and Lambda functions into your VPC. For a detailed breakdown of all resources, see [Architecture](#architecture).
+
+## Quick Start
+
+The quickstart script deploys the full solution — sample VPC infrastructure and the Capability Insights dashboard — in a single non-interactive command. It's the fastest way to get a working deployment.
+
+**What it does:**
+
+1. Builds all project packages (shared types, Lambda, CDK constructs, website)
+2. Deploys the **Sample Environment** stack (VPC, subnets, EC2 bastion instance)
+3. Deploys the **Capability Insights** stack into the sample environment (API Gateway, Lambdas, S3 website bucket)
+4. Triggers the initial data sync from the S3 access point
+5. Opens Chrome via an SSM SOCKS proxy so you can browse the dashboard
+
+**Prerequisites:** Node.js, AWS CLI (authenticated), and the [Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html).
+
+**Configure your data source** (one-time setup):
+
+```bash
+cp deployment/deploy-config.yaml.example deployment/deploy-config.yaml
+# Edit deploy-config.yaml and set source_access_point_arn and source_folders
+```
+
+If you don't have a custom access point, leave it blank — the script will default to the public AWS capabilities data.
+
+**Run it:**
+
+```bash
+AWS_PROFILE=my-profile npm run dev:quickstart
+```
+
+That's it. No confirmation prompts, no manual steps. The deployment takes ~15 minutes on first run (CloudFormation stack creation). When it finishes, Chrome opens with the dashboard.
+
+To tear everything down later:
+
+```bash
+AWS_PROFILE=my-profile npm run dev:teardown
+```
 
 ## Installation
 
