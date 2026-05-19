@@ -128,10 +128,21 @@ fi
 echo "  ✓ Instance is online"
 
 # Kill any existing proxy on the same port
-if lsof -ti :"$LOCAL_PORT" &>/dev/null; then
-  echo "── Stopping existing proxy on port $LOCAL_PORT ──"
-  kill $(lsof -ti :"$LOCAL_PORT") 2>/dev/null || true
-  sleep 1
+port_in_use() {
+  if command -v lsof &>/dev/null; then
+    lsof -ti :"$LOCAL_PORT" &>/dev/null
+  elif command -v netstat &>/dev/null; then
+    netstat -an 2>/dev/null | grep -q "[:.]${LOCAL_PORT} .*LISTEN"
+  else
+    # Try connecting to the port
+    (echo >/dev/tcp/localhost/"$LOCAL_PORT") 2>/dev/null
+  fi
+}
+
+if port_in_use; then
+  echo "── Port $LOCAL_PORT already in use ──"
+  echo "  Kill the existing process or use --port to pick a different one."
+  exit 1
 fi
 
 # Generate a temporary SSH key pair
@@ -184,7 +195,7 @@ SSH_PID=$!
 # Wait for the proxy to start listening
 echo "  Waiting for proxy to be ready..."
 for i in $(seq 1 30); do
-  if lsof -ti :"$LOCAL_PORT" &>/dev/null; then
+  if port_in_use; then
     break
   fi
   if ! kill -0 "$SSH_PID" 2>/dev/null; then
@@ -194,7 +205,7 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
-if ! lsof -ti :"$LOCAL_PORT" &>/dev/null; then
+if ! port_in_use; then
   echo "Error: Proxy did not start within 30 seconds."
   kill "$SSH_PID" 2>/dev/null || true
   exit 1
@@ -204,15 +215,28 @@ echo "  ✓ Proxy running (pid $SSH_PID)"
 
 # Open Chrome with the proxy, pointed at the website
 echo "── Opening Chrome ──"
-CHROME_APP="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-if [[ -x "$CHROME_APP" ]]; then
-  "$CHROME_APP" \
+CHROME_CMD=""
+if [[ -x "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" ]]; then
+  CHROME_CMD="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+elif command -v google-chrome &>/dev/null; then
+  CHROME_CMD="google-chrome"
+elif command -v google-chrome-stable &>/dev/null; then
+  CHROME_CMD="google-chrome-stable"
+elif [[ -f "/c/Program Files/Google/Chrome/Application/chrome.exe" ]]; then
+  CHROME_CMD="/c/Program Files/Google/Chrome/Application/chrome.exe"
+elif [[ -f "/c/Program Files (x86)/Google/Chrome/Application/chrome.exe" ]]; then
+  CHROME_CMD="/c/Program Files (x86)/Google/Chrome/Application/chrome.exe"
+fi
+
+CHROME_DATA_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t 'chrome-ci-proxy')
+if [[ -n "$CHROME_CMD" ]]; then
+  "$CHROME_CMD" \
     --proxy-server="socks5://localhost:$LOCAL_PORT" \
-    --user-data-dir="/tmp/chrome-ci-proxy" \
+    --user-data-dir="$CHROME_DATA_DIR" \
     "$WEBSITE_URL" &>/dev/null &
   echo "  ✓ Chrome opened to $WEBSITE_URL"
 else
-  echo "  Chrome not found at default path. Open your browser manually with:"
+  echo "  Chrome not found. Open your browser manually with:"
   echo "    Proxy: socks5://localhost:$LOCAL_PORT"
   echo "    URL:   $WEBSITE_URL"
 fi
