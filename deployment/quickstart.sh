@@ -109,5 +109,5 @@ echo "╔═══════════════════════�
 echo "║          ✓ Quickstart deploy complete!          ║"
 echo "╚══════════════════════════════════════════════════╝"
 echo ""
-echo "Run 'npm run browse' to access the website via SSH tunnel."
-echo "Run 'npm run dev:teardown' to remove everything."
+echo "── Opening browser via SSM proxy ──"
+"$SCRIPT_DIR/browse.sh"
