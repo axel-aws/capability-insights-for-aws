@@ -22,6 +22,7 @@
     "teardown": "npm run build && ./deployment/deploy.sh teardown",
     "dev:setup": "npm run build && ./deployment/dev.sh setup",
     "dev:deploy": "npm run build && ./deployment/dev.sh deploy",
+    "dev:quickstart": "./deployment/quickstart.sh",
     "dev:teardown": "npm run build && ./deployment/dev.sh teardown",
     "server": "npm run dev --workspace=source/website",
     "browse": "bash ./deployment/browse.sh"
