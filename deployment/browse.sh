@@ -152,10 +152,17 @@ fi
 
 # Push the public key to the instance via EC2 Instance Connect (valid for 60s)
 echo "  Pushing temporary SSH key to instance..."
+# Convert to Windows path for AWS CLI (which runs as a Windows binary)
+TEMP_KEY_PUB="${TEMP_KEY}.pub"
+if command -v cygpath &>/dev/null; then
+  TEMP_KEY_PUB_WIN=$(cygpath -w "$TEMP_KEY_PUB")
+else
+  TEMP_KEY_PUB_WIN="$TEMP_KEY_PUB"
+fi
 aws ec2-instance-connect send-ssh-public-key \
   --instance-id "$INSTANCE_ID" \
   --instance-os-user ec2-user \
-  --ssh-public-key "file://${TEMP_KEY}.pub" \
+  --ssh-public-key "file://${TEMP_KEY_PUB_WIN}" \
   $PROFILE_FLAG > /dev/null || {
   echo "Error: Failed to push SSH key via EC2 Instance Connect."
   exit 1
