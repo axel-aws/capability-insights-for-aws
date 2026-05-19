@@ -185,7 +185,6 @@ export class CapabilityInsightsSampleEnvironmentStack extends cdk.Stack {
     const linuxInstanceName = `${publicSubnetName}LinuxInstance`;
     const linuxInstanceProfileName = `${linuxInstanceName}Profile`;
     const linuxInstanceProfile = new iam.CfnInstanceProfile(this, linuxInstanceProfileName, {
-      instanceProfileName: linuxInstanceProfileName,
       roles: [instanceRoleNameFn],
     });
     linuxInstanceProfile.addDependency(instanceRole);
@@ -193,7 +192,7 @@ export class CapabilityInsightsSampleEnvironmentStack extends cdk.Stack {
       subnetId: this.publicSubnet.attrSubnetId,
       instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO).toString(),
       imageId: latestLinuxAmiId.valueAsString,
-      iamInstanceProfile: linuxInstanceProfileName,
+      iamInstanceProfile: cdk.Fn.ref(linuxInstanceProfile.logicalId),
       securityGroupIds: [sshSecurityGroup.attrGroupId],
       keyName: keypairName || undefined,
       tags: [{ key: 'Name', value: linuxInstanceName }],
