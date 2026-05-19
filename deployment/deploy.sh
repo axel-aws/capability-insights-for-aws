@@ -65,6 +65,7 @@ load_config() {
       value=$(echo "$line" | sed 's/^[^:]*:[[:space:]]*//' | xargs)
       [[ -z "$value" ]] && continue
       case "$key" in
+        aws_profile)                 CONFIG_AWS_PROFILE="$value" ;;
         private_vpc_id)              CONFIG_PRIVATE_VPC_ID="$value" ;;
         backend_subnet_id)           CONFIG_BACKEND_SUBNET_ID="$value" ;;
         api_access_subnet_id)        CONFIG_API_ACCESS_SUBNET_ID="$value" ;;
@@ -111,6 +112,13 @@ cmd_deploy() {
 
   # Load config file values for anything not already set via CLI flags
   load_config
+
+  # Apply AWS profile from config if not already set via environment
+  if [[ -z "$AWS_PROFILE" && -n "${CONFIG_AWS_PROFILE:-}" ]]; then
+    export AWS_PROFILE="$CONFIG_AWS_PROFILE"
+    echo "  Using AWS profile: $AWS_PROFILE (from deploy-config.yaml)"
+  fi
+
   [[ -z "$private_vpc_id" ]]              && private_vpc_id="${CONFIG_PRIVATE_VPC_ID:-}"
   [[ -z "$backend_subnet_id" ]]           && backend_subnet_id="${CONFIG_BACKEND_SUBNET_ID:-}"
   [[ -z "$api_access_subnet_id" ]]        && api_access_subnet_id="${CONFIG_API_ACCESS_SUBNET_ID:-}"

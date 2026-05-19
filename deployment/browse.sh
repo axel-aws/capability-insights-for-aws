@@ -37,6 +37,18 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Load profile from deploy-config.yaml if not specified via flag or env
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -z "$PROFILE" && -z "$AWS_PROFILE" ]]; then
+  CONFIG_FILE="$SCRIPT_DIR/deploy-config.yaml"
+  if [[ -f "$CONFIG_FILE" ]]; then
+    CONFIG_PROFILE=$(grep '^aws_profile:' "$CONFIG_FILE" | sed 's/^aws_profile:[[:space:]]*//' | xargs)
+    if [[ -n "$CONFIG_PROFILE" ]]; then
+      PROFILE="$CONFIG_PROFILE"
+    fi
+  fi
+fi
+
 # Build the --profile flag used in all AWS CLI calls
 PROFILE_FLAG=""
 if [[ -n "$PROFILE" ]]; then

@@ -3,6 +3,9 @@
 # Any populated values will skip the interactive prompt during deployment.
 # CLI flags (--private-vpc-id, etc.) still take precedence over this file.
 
+# AWS CLI profile (used by deploy, dev, and browse scripts)
+aws_profile:
+
 # Required infrastructure
 private_vpc_id: vpc-0abc123
 backend_subnet_id: subnet-0abc123

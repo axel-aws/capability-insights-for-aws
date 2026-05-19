@@ -29,6 +29,23 @@ EOF
   exit 1
 }
 
+# Load AWS profile from deploy-config.yaml if not already set
+load_profile() {
+  if [[ -z "$AWS_PROFILE" ]]; then
+    local config_file="$SCRIPT_DIR/deploy-config.yaml"
+    if [[ -f "$config_file" ]]; then
+      local profile
+      profile=$(grep '^aws_profile:' "$config_file" | sed 's/^aws_profile:[[:space:]]*//' | xargs)
+      if [[ -n "$profile" ]]; then
+        export AWS_PROFILE="$profile"
+        echo "  Using AWS profile: $AWS_PROFILE (from deploy-config.yaml)"
+      fi
+    fi
+  fi
+}
+
+load_profile
+
 get_stack_output() {
   aws cloudformation describe-stacks --stack-name "$STACK_NAME" \
     --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text
