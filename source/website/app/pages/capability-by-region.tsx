@@ -4,7 +4,6 @@ import Header from '@cloudscape-design/components/header';
 import SpaceBetween from '@cloudscape-design/components/space-between';
 import Tabs from '@cloudscape-design/components/tabs';
 import Box from '@cloudscape-design/components/box';
-import Badge from '@cloudscape-design/components/badge';
 import ColumnLayout from '@cloudscape-design/components/column-layout';
 import Link from '@cloudscape-design/components/link';
 import Popover from '@cloudscape-design/components/popover';
@@ -16,7 +15,6 @@ import { APP_NAME, PAGE_CAPABILITY_BY_REGION } from '~/constants/app';
 import type { Region } from '@capability-insights/shared/types/capability/region';
 import { capabilityInsightsClient, DataFile } from '~/clients/capability-insights-client';
 import type { SyncMetadata } from '@capability-insights/shared/types/sync-metadata';
-import AvailabilityStatCard from '~/components/availability/availability-stat-card';
 import type { ApiViewMode } from '~/components/availability/api-view-selector';
 import { useTerraformOverlay } from '~/hooks/use-terraform-overlay';
 import { useClassicApiAvailability } from '~/hooks/use-classic-api-availability';
@@ -69,7 +67,6 @@ export default function CapabilityByRegion() {
 
   // Hooks needed for stat cards and tab labels — called at page level
   const overlay = useTerraformOverlay(cfnRows);
-  const translatedCfnRows = overlay.translateRows(cfnRows);
 
   const [apiViewMode, setApiViewMode] = useState<ApiViewMode>('api-operations');
   const classicApi = useClassicApiAvailability(apiRows, regions);
@@ -191,31 +188,6 @@ export default function CapabilityByRegion() {
             </SpaceBetween>
           </Container>
         )}
-
-        <ColumnLayout columns={4} variant="text-grid">
-          <AvailabilityStatCard
-            label="Services &amp; features"
-            loading={loading}
-            badges={['services', 'features']}
-            rows={productRows}
-          />
-          <AvailabilityStatCard
-            label="API operations"
-            loading={loading}
-            badges={apiViewMode === 'terraform-aws' ? ['resources', 'services'] : ['SDK services', 'operations']}
-            rows={apiViewMode === 'terraform-aws' ? classicApi.rows : apiRows}
-          />
-          <AvailabilityStatCard
-            label="CloudFormation resources"
-            loading={loading}
-            badges={['services', 'resource types']}
-            rows={translatedCfnRows}
-          />
-          <div>
-            <Box variant="awsui-key-label">Regions</Box>
-            <Box variant="p">{loading ? 'Loading…' : <Badge>{regions.length.toLocaleString()} regions</Badge>}</Box>
-          </div>
-        </ColumnLayout>
 
         <Tabs
           tabs={[
