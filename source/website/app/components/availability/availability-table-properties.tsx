@@ -94,7 +94,7 @@ export function createFilteringProperties(
       propertyLabel: `${r.RegionLongName} (${r.Region})`,
       groupValuesLabel: `${r.RegionLongName} values`,
       operators: enumOperators,
-      group: getRegionCluster(r.Region),
+      group: getRegionCluster(r),
     })),
   ];
 
