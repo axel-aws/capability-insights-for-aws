@@ -437,7 +437,6 @@ export default function AvailabilityTable<T extends RegionalAvailability>({
                 values: 'Property values',
                 group: 'properties',
               },
-              { properties: 'Regions', values: 'Region values', group: 'regions' },
             ]}
             {...(includeStackProperty || includePlanProperty ? { onLoadItems: handleLoadItems } : {})}
           />

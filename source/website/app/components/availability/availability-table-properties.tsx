@@ -15,6 +15,7 @@ import type { AvailabilityStatus } from '@capability-insights/shared/types/avail
 import type { StackResourcesResponse, PropertyMatch } from '@capability-insights/shared/types/capability/stack';
 import type { CapabilitySet } from '@capability-insights/shared/types/infrastructure-planning/plan-configuration';
 import AvailabilityStatusIndicator from '~/components/availability/availability-status-indicator';
+import { getRegionCluster } from '~/constants/region-clusters';
 
 const enumOperators: PropertyFilterProps.FilteringProperty['operators'] = [
   { operator: '=', tokenType: 'enum' },
@@ -93,7 +94,7 @@ export function createFilteringProperties(
       propertyLabel: `${r.RegionLongName} (${r.Region})`,
       groupValuesLabel: `${r.RegionLongName} values`,
       operators: enumOperators,
-      group: 'regions',
+      group: getRegionCluster(r.Region),
     })),
   ];
 

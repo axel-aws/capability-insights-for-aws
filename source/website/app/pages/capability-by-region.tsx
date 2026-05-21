@@ -22,6 +22,7 @@ import { useTerraformOverlay } from '~/hooks/use-terraform-overlay';
 import { useClassicApiAvailability } from '~/hooks/use-classic-api-availability';
 import { fromApiServices, fromCfnResources, fromProducts } from '~/mappers/regional-availability.mapper';
 import { formatTimestamp } from '~/utils/time-utils';
+import { sortRegionsByCluster } from '~/constants/region-clusters';
 import type {
   ProductAvailability,
   ApiAvailability,
@@ -86,7 +87,7 @@ export default function CapabilityByRegion() {
         capabilityInsightsClient.listCfnResources(),
         capabilityInsightsClient.getLastSyncTime(),
       ]);
-      setRegions(r);
+      setRegions(sortRegionsByCluster(r));
       setProductRows(fromProducts(p));
       setApiRows(fromApiServices(a));
       setCfnRows(fromCfnResources(c));
