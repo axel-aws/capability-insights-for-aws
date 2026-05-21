@@ -19,11 +19,13 @@ const lambdaMock = mockClient(LambdaClient);
 // Mock the S3BucketClient
 const mockGetObject = vi.fn();
 const mockPutObject = vi.fn();
+const mockListObjects = vi.fn();
 
 vi.mock('./services/s3-client', () => ({
   S3BucketClient: vi.fn().mockImplementation(() => ({
     getObject: mockGetObject,
     putObject: mockPutObject,
+    listObjects: mockListObjects,
   })),
 }));
 
@@ -82,6 +84,7 @@ describe('Property 4: Token passthrough to overlay Lambda', () => {
     lambdaMock.reset();
     mockGetObject.mockReset();
     mockPutObject.mockReset();
+    mockListObjects.mockReset();
     mockGetSettings.mockReset();
     mockGetToken.mockReset();
 
@@ -92,6 +95,9 @@ describe('Property 4: Token passthrough to overlay Lambda', () => {
       }
       return Promise.resolve('[]');
     });
+
+    // listObjects returns empty by default (no uploads)
+    mockListObjects.mockResolvedValue([]);
 
     // putObject always succeeds
     mockPutObject.mockResolvedValue(undefined);

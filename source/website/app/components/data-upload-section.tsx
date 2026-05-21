@@ -10,7 +10,7 @@ import Box from '@cloudscape-design/components/box';
 import StatusIndicator from '@cloudscape-design/components/status-indicator';
 import type { SelectProps } from '@cloudscape-design/components/select';
 import { DataFile, capabilityInsightsClient } from '~/clients/capability-insights-client';
-import type { DataFileInfo } from '~/clients/capability-insights-client';
+import type { DataFileInfo, UploadRecord } from '~/clients/capability-insights-client';
 import { formatTimestamp } from '~/utils/time-utils';
 
 const DATA_FILE_OPTIONS: SelectProps.Option[] = [
@@ -22,12 +22,15 @@ const DATA_FILE_OPTIONS: SelectProps.Option[] = [
 
 export function DataUploadSection() {
   const [files, setFiles] = useState<DataFileInfo[]>([]);
+  const [uploads, setUploads] = useState<UploadRecord[]>([]);
   const [loadingFiles, setLoadingFiles] = useState(true);
+  const [loadingUploads, setLoadingUploads] = useState(true);
   const [selectedFile, setSelectedFile] = useState<SelectProps.Option | null>(DATA_FILE_OPTIONS[0]);
   const [uploading, setUploading] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
-  const [fileContent, setFileContent] = useState<string | null>(null);
+  const [selectedBrowserFile, setSelectedBrowserFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -43,51 +46,73 @@ export function DataUploadSection() {
     }
   };
 
+  const fetchUploads = async () => {
+    setLoadingUploads(true);
+    try {
+      const result = await capabilityInsightsClient.listUploads();
+      setUploads(result.uploads);
+    } catch {
+      // Non-critical
+    } finally {
+      setLoadingUploads(false);
+    }
+  };
+
   useEffect(() => {
     fetchFiles();
+    fetchUploads();
   }, []);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setValidationError(null);
-    setFileContent(null);
+    setSelectedBrowserFile(null);
     setFileName(null);
 
     const file = event.target.files?.[0];
     if (!file) return;
 
-    setFileName(file.name);
+    if (!file.name.endsWith('.json')) {
+      setValidationError('File must be a .json file.');
+      return;
+    }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const content = e.target?.result as string;
-      try {
-        const parsed = JSON.parse(content);
-        if (!Array.isArray(parsed)) {
-          setValidationError('File content must be a JSON array.');
-          return;
-        }
-        setFileContent(content);
-      } catch {
-        setValidationError('File content is not valid JSON.');
-      }
-    };
-    reader.readAsText(file);
+    setFileName(file.name);
+    setSelectedBrowserFile(file);
   };
 
   const handleUpload = async () => {
-    if (!selectedFile?.value || !fileContent) return;
+    if (!selectedFile?.value || !selectedBrowserFile) return;
 
     setUploading(true);
     setNotification(null);
     try {
-      await capabilityInsightsClient.uploadDataFile(selectedFile.value as DataFile, fileContent);
-      setNotification({ type: 'success', message: `Successfully uploaded ${selectedFile.value}.json` });
-      setFileContent(null);
-      setFileName(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
+      const dataFile = selectedFile.value as DataFile;
+
+      // 1. Get presigned URL
+      const { uploadId, presignedUrl, s3Key } = await capabilityInsightsClient.getPresignedUrl(dataFile);
+
+      // 2. Upload file directly to S3 via presigned URL
+      const fileContent = await selectedBrowserFile.arrayBuffer();
+      const putResponse = await fetch(presignedUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: fileContent,
+      });
+      if (!putResponse.ok) {
+        throw new Error(`S3 upload failed: ${putResponse.status}`);
       }
-      await fetchFiles();
+
+      // 3. Complete the upload (validate + rebuild)
+      const result = await capabilityInsightsClient.completeUpload(uploadId, dataFile, s3Key);
+
+      setNotification({
+        type: 'success',
+        message: `Uploaded ${selectedFile.value}.json — ${result.mergeResult.additions} additions, ${result.mergeResult.updates} updates, ${result.mergeResult.total} total items.`,
+      });
+      setSelectedBrowserFile(null);
+      setFileName(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      await Promise.all([fetchFiles(), fetchUploads()]);
     } catch (e) {
       setNotification({ type: 'error', message: e instanceof Error ? e.message : 'Upload failed.' });
     } finally {
@@ -95,21 +120,31 @@ export function DataUploadSection() {
     }
   };
 
+  const handleDelete = async (uploadId: string) => {
+    setDeleting(uploadId);
+    setNotification(null);
+    try {
+      await capabilityInsightsClient.deleteUpload(uploadId);
+      setNotification({ type: 'success', message: 'Upload deleted and data rebuilt.' });
+      await Promise.all([fetchFiles(), fetchUploads()]);
+    } catch (e) {
+      setNotification({ type: 'error', message: e instanceof Error ? e.message : 'Delete failed.' });
+    } finally {
+      setDeleting(null);
+    }
+  };
+
   return (
     <Container header={<Header variant="h2">Data upload</Header>}>
       <SpaceBetween size="l">
         <Alert type="info">
-          Replace the authoritative data file in your data store with an uploaded file. This completely overwrites the
-          existing file.
+          Upload a JSON data file. It will be merged with canonical data — new items are added, existing items are
+          updated. Upload history is preserved and individual uploads can be removed.
         </Alert>
 
         <Table
           columnDefinitions={[
-            {
-              id: 'name',
-              header: 'File',
-              cell: (item: DataFileInfo) => item.name,
-            },
+            { id: 'name', header: 'File', cell: (item: DataFileInfo) => item.name },
             {
               id: 'lastModified',
               header: 'Last modified',
@@ -147,26 +182,49 @@ export function DataUploadSection() {
               onChange={handleFileChange}
               aria-label="Select JSON file to upload"
             />
-            {fileName && fileContent && (
-              <StatusIndicator type="success">Valid JSON array: {fileName}</StatusIndicator>
+            {fileName && selectedBrowserFile && (
+              <StatusIndicator type="success">Selected: {fileName}</StatusIndicator>
             )}
           </SpaceBetween>
 
           {validationError && <Alert type="error">{validationError}</Alert>}
 
-          <Box variant="small" color="text-body-secondary">
-            Uploading will completely replace the selected data file. This action cannot be undone.
-          </Box>
-
           <Button
             variant="primary"
             onClick={handleUpload}
             loading={uploading}
-            disabled={!fileContent || !selectedFile}
+            disabled={!selectedBrowserFile || !selectedFile}
           >
             Upload
           </Button>
         </SpaceBetween>
+
+        {uploads.length > 0 && (
+          <Table
+            header={<Header variant="h3">Upload history</Header>}
+            columnDefinitions={[
+              { id: 'fileName', header: 'File', cell: (item: UploadRecord) => item.fileName },
+              { id: 'uploadedAt', header: 'Uploaded', cell: (item: UploadRecord) => formatTimestamp(item.uploadedAt) },
+              { id: 'itemCount', header: 'Items', cell: (item: UploadRecord) => item.itemCount },
+              {
+                id: 'actions',
+                header: 'Actions',
+                cell: (item: UploadRecord) => (
+                  <Button
+                    variant="inline-link"
+                    onClick={() => handleDelete(item.uploadId)}
+                    loading={deleting === item.uploadId}
+                  >
+                    Delete
+                  </Button>
+                ),
+              },
+            ]}
+            items={uploads}
+            loading={loadingUploads}
+            loadingText="Loading upload history"
+          />
+        )}
 
         {notification && <Alert type={notification.type}>{notification.message}</Alert>}
       </SpaceBetween>

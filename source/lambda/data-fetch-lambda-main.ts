@@ -7,6 +7,8 @@ import { ContentType, FileFormat } from './constants/file-formats';
 import { logger } from './util/logger';
 import { mergeCsv } from './data-fetch/merge/merge-csv';
 import { mergeJson } from './data-fetch/merge/merge-json';
+import { rebuildMergedData } from './services/data-merge-service';
+import type { DataFile } from './services/data-merge-service';
 
 import type { Region } from '@capability-insights/shared/types/capability/region';
 import type { Product } from '@capability-insights/shared/types/capability/product';
@@ -112,10 +114,15 @@ export const handler = async (event?: DataFetchEvent): Promise<{
       }
       if (chunks.length > 0) {
         const merged = merge(chunks);
-        await dest.putObject(`data/${format}/${name}.${format}`, merged, ContentType[format]);
-        logger.info('Wrote merged file', {
-          path: `data/${format}/${name}.${format}`,
-        });
+        if (format === FileFormat.JSON) {
+          // Write to canonical path, then rebuild merged output (canonical + uploads)
+          await dest.putObject(`data/canonical/${name}.json`, merged, ContentType[format]);
+          await rebuildMergedData(dest, name as DataFile);
+          logger.info('Wrote canonical and rebuilt merged file', { path: `data/canonical/${name}.json` });
+        } else {
+          await dest.putObject(`data/${format}/${name}.${format}`, merged, ContentType[format]);
+          logger.info('Wrote merged file', { path: `data/${format}/${name}.${format}` });
+        }
       }
     }
   }

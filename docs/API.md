@@ -72,10 +72,11 @@ The `ErrorResponse` utility (`source/lambda/constants/errors.ts`) provides facto
 | DELETE | `/policies/:policyId/parts/:partIndex` | Policy Parts         | Delete a single policy part                  |
 | GET    | `/syncSettings`                        | Sync Settings        | Get current sync settings                    |
 | PUT    | `/syncSettings`                        | Sync Settings        | Update sync settings                         |
-| GET    | `/data/info`                           | Data Utilities       | List data files with metadata                |
-| POST   | `/data/upload`                         | Data Utilities       | Upload a data file                           |
-| POST   | `/data/merge/preview`                  | Data Utilities       | Preview a merge operation                    |
-| POST   | `/data/merge/commit`                   | Data Utilities       | Commit a staged merge                        |
+| GET    | `/data/info`                           | Data Uploads         | List data files with metadata                |
+| POST   | `/data/uploads/presigned`              | Data Uploads         | Get presigned URL for upload                 |
+| POST   | `/data/uploads/complete`               | Data Uploads         | Complete upload and trigger rebuild          |
+| GET    | `/data/uploads`                        | Data Uploads         | List uploads (optional ?fileName= filter)    |
+| DELETE | `/data/uploads/:uploadId`              | Data Uploads         | Delete an upload and trigger rebuild         |
 | POST   | `/plans`                               | Infrastructure Plans | Create a new plan                            |
 | GET    | `/plans`                               | Infrastructure Plans | List all plans                               |
 | GET    | `/plans/names`                         | Infrastructure Plans | Get plan names for autocomplete              |
@@ -748,7 +749,7 @@ Updates sync settings. When enabling the Terraform overlay, a GitHub token must 
 
 ---
 
-### Data Utilities
+### Data Uploads
 
 #### GET /data/info
 
@@ -771,102 +772,129 @@ Lists data files with last-modified timestamps and sizes from S3.
 
 ---
 
-#### POST /data/upload
+#### POST /data/uploads/presigned
 
-Validates and writes a JSON array to the specified data file in S3.
+Returns a presigned URL for uploading a file directly to S3.
 
 **Request body**:
 
 ```json
 {
-  "fileName": "regions",
-  "content": "[{\"Region\":\"us-east-1\",\"RegionName\":\"US East (N. Virginia)\"}]"
+  "fileName": "products"
 }
 ```
 
 | Field      | Type     | Required | Description                                            |
 | ---------- | -------- | -------- | ------------------------------------------------------ |
 | `fileName` | `string` | Yes      | One of: `regions`, `products`, `apis`, `cfn_resources` |
-| `content`  | `string` | Yes      | JSON-encoded array (stringified)                       |
 
 **Response** (200):
 
 ```json
 {
-  "success": true,
-  "lastModified": "2024-01-15T10:35:00Z"
-}
-```
-
-**Error responses**:
-
-- `400` — Invalid file name or content is not a valid JSON array
-
----
-
-#### POST /data/merge/preview
-
-Stages uploaded data and computes a merge preview showing additions, updates, and unchanged items.
-
-**Request body**:
-
-```json
-{
-  "fileName": "products",
-  "content": "[{\"productId\":\"new-service\",\"productName\":\"New Service\"}]"
-}
-```
-
-**Response** (200):
-
-```json
-{
-  "mergeId": "550e8400-e29b-41d4-a716-446655440000",
-  "fileName": "products",
-  "additions": 1,
-  "updates": 0,
-  "unchanged": 150,
-  "totalAfterMerge": 151
-}
-```
-
-**Error responses**:
-
-- `400` — Invalid file name or content is not a valid JSON array
-
----
-
-#### POST /data/merge/commit
-
-Commits a previously staged merge operation. Reads the staged data, performs the merge, writes the result, and cleans up.
-
-**Request body**:
-
-```json
-{
-  "fileName": "products",
-  "mergeId": "550e8400-e29b-41d4-a716-446655440000"
-}
-```
-
-| Field      | Type     | Required | Description                                            |
-| ---------- | -------- | -------- | ------------------------------------------------------ |
-| `fileName` | `string` | Yes      | One of: `regions`, `products`, `apis`, `cfn_resources` |
-| `mergeId`  | `string` | Yes      | The merge ID from the preview response                 |
-
-**Response** (200):
-
-```json
-{
-  "success": true,
-  "itemCount": 151
+  "uploadId": "550e8400-e29b-41d4-a716-446655440000",
+  "presignedUrl": "https://s3.amazonaws.com/...",
+  "s3Key": "data/uploads/products/550e8400-e29b-41d4-a716-446655440000.json"
 }
 ```
 
 **Error responses**:
 
 - `400` — Invalid file name
-- `404` — Merge session not found or expired
+
+---
+
+#### POST /data/uploads/complete
+
+Validates the uploaded file in S3, stores metadata in DynamoDB, and triggers a data rebuild.
+
+**Request body**:
+
+```json
+{
+  "uploadId": "550e8400-e29b-41d4-a716-446655440000",
+  "fileName": "products",
+  "s3Key": "data/uploads/products/550e8400-e29b-41d4-a716-446655440000.json",
+  "description": "Optional description"
+}
+```
+
+| Field         | Type     | Required | Description                                            |
+| ------------- | -------- | -------- | ------------------------------------------------------ |
+| `uploadId`    | `string` | Yes      | The upload ID from the presigned response              |
+| `fileName`    | `string` | Yes      | One of: `regions`, `products`, `apis`, `cfn_resources` |
+| `s3Key`       | `string` | Yes      | The S3 key from the presigned response                 |
+| `description` | `string` | No       | Optional description of the upload                     |
+
+**Response** (200):
+
+```json
+{
+  "success": true,
+  "uploadId": "550e8400-e29b-41d4-a716-446655440000",
+  "uploadedAt": "2024-01-15T10:35:00Z",
+  "mergeResult": { "additions": 5, "updates": 3, "unchanged": 142, "total": 150 }
+}
+```
+
+**Error responses**:
+
+- `400` — Invalid request, content not valid JSON array
+- `404` — Upload not found in S3 (presigned URL may have expired)
+
+---
+
+#### GET /data/uploads
+
+Lists upload records, optionally filtered by file name.
+
+**Query parameters**:
+
+| Parameter  | Type     | Required | Description                                            |
+| ---------- | -------- | -------- | ------------------------------------------------------ |
+| `fileName` | `string` | No       | One of: `regions`, `products`, `apis`, `cfn_resources` |
+
+**Response** (200):
+
+```json
+{
+  "uploads": [
+    {
+      "uploadId": "550e8400-e29b-41d4-a716-446655440000",
+      "fileName": "products",
+      "s3Key": "data/uploads/products/550e8400-e29b-41d4-a716-446655440000.json",
+      "uploadedAt": "2024-01-15T10:35:00Z",
+      "itemCount": 50,
+      "description": ""
+    }
+  ]
+}
+```
+
+---
+
+#### DELETE /data/uploads/:uploadId
+
+Deletes an upload from S3 and DynamoDB, then triggers a data rebuild.
+
+**Path parameters**:
+
+| Parameter  | Description                |
+| ---------- | -------------------------- |
+| `uploadId` | The ID of the upload       |
+
+**Response** (200):
+
+```json
+{
+  "success": true,
+  "mergeResult": { "additions": 2, "updates": 1, "unchanged": 145, "total": 148 }
+}
+```
+
+**Error responses**:
+
+- `404` — Upload not found
 
 ---
 

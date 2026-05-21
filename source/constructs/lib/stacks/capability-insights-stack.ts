@@ -353,6 +353,32 @@ export class CapabilityInsightsStack extends cdk.Stack {
     });
     planTable.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
+    // Data Uploads DynamoDB Table
+    const dataUploadsTableName = `${prefix}DataUploads`;
+    const dataUploadsTable = new dynamodb.CfnTable(this, dataUploadsTableName, {
+      tableName: cdk.Fn.sub(`${dataUploadsTableName}-\${AWS::Region}`),
+      billingMode: 'PAY_PER_REQUEST',
+      sseSpecification: { sseEnabled: true },
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
+      keySchema: [{ attributeName: 'uploadId', keyType: 'HASH' }],
+      attributeDefinitions: [
+        { attributeName: 'uploadId', attributeType: 'S' },
+        { attributeName: 'fileName', attributeType: 'S' },
+        { attributeName: 'uploadedAt', attributeType: 'S' },
+      ],
+      globalSecondaryIndexes: [
+        {
+          indexName: 'FileNameIndex',
+          keySchema: [
+            { attributeName: 'fileName', keyType: 'HASH' },
+            { attributeName: 'uploadedAt', keyType: 'RANGE' },
+          ],
+          projection: { projectionType: 'ALL' },
+        },
+      ],
+    });
+    dataUploadsTable.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+
     // GitHub PAT Secret — stores the GitHub Personal Access Token in Secrets Manager
     const secretName = `${prefix}GitHubPAT`;
     const githubPatSecret = new secretsmanager.CfnSecret(this, secretName, {
@@ -399,10 +425,18 @@ export class CapabilityInsightsStack extends cdk.Stack {
               },
               {
                 Effect: 'Allow',
-                Action: ['s3:PutObject'],
+                Action: ['s3:PutObject', 's3:GetObject'],
                 Resource: cdk.Fn.sub('${BucketArn}/data/*', {
                   BucketArn: cdk.Fn.getAtt(websiteBucket.logicalId, 'Arn').toString(),
                 }),
+              },
+              {
+                Effect: 'Allow',
+                Action: 's3:ListBucket',
+                Resource: cdk.Fn.getAtt(websiteBucket.logicalId, 'Arn').toString(),
+                Condition: {
+                  StringLike: { 's3:prefix': 'data/uploads/*' },
+                },
               },
             ],
           },
@@ -772,6 +806,14 @@ export class CapabilityInsightsStack extends cdk.Stack {
                   BucketArn: cdk.Fn.getAtt(websiteBucket.logicalId, 'Arn').toString(),
                 }),
               },
+              {
+                Effect: 'Allow',
+                Action: 's3:ListBucket',
+                Resource: cdk.Fn.getAtt(websiteBucket.logicalId, 'Arn').toString(),
+                Condition: {
+                  StringLike: { 's3:prefix': 'data/*' },
+                },
+              },
             ],
           },
         },
@@ -841,6 +883,30 @@ export class CapabilityInsightsStack extends cdk.Stack {
           },
         },
         {
+          policyName: 'DynamoDBDataUploadsTableAccess',
+          policyDocument: {
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: [
+                  'dynamodb:GetItem',
+                  'dynamodb:PutItem',
+                  'dynamodb:DeleteItem',
+                  'dynamodb:Query',
+                  'dynamodb:Scan',
+                ],
+                Resource: [
+                  cdk.Fn.getAtt(dataUploadsTable.logicalId, 'Arn').toString(),
+                  cdk.Fn.sub('${TableArn}/index/*', {
+                    TableArn: cdk.Fn.getAtt(dataUploadsTable.logicalId, 'Arn').toString(),
+                  }),
+                ],
+              },
+            ],
+          },
+        },
+        {
           policyName: 'SecretsManagerAccess',
           policyDocument: {
             Version: '2012-10-17',
@@ -881,6 +947,7 @@ export class CapabilityInsightsStack extends cdk.Stack {
           IAM_HELPER_LAMBDA_NAME: iamHelperLambdaName,
           GITHUB_TOKEN_SECRET_NAME: cdk.Fn.ref(githubPatSecret.logicalId),
           GITHUB_FETCH_FUNCTION_NAME: githubFetchLambdaName,
+          DATA_UPLOADS_TABLE_NAME: cdk.Fn.ref(dataUploadsTable.logicalId),
         },
       },
     });

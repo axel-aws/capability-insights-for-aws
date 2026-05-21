@@ -34,6 +34,32 @@ export interface MergePreview {
   totalAfterMerge: number;
 }
 
+export interface PresignedUrlResponse {
+  uploadId: string;
+  presignedUrl: string;
+  s3Key: string;
+}
+
+export interface UploadCompleteResponse {
+  success: boolean;
+  uploadId: string;
+  uploadedAt: string;
+  mergeResult: { additions: number; updates: number; unchanged: number; total: number };
+}
+
+export interface UploadRecord {
+  uploadId: string;
+  fileName: string;
+  s3Key: string;
+  uploadedAt: string;
+  itemCount: number;
+  description: string;
+}
+
+export interface UploadsListResponse {
+  uploads: UploadRecord[];
+}
+
 export enum DataFormat {
   JSON = 'json',
   CSV = 'csv',
@@ -120,16 +146,21 @@ export class CapabilityInsightsClient extends BaseApiClient {
     return this.get<DataFilesInfo>('/data/info');
   }
 
-  async uploadDataFile(fileName: DataFile, content: string): Promise<{ success: boolean; lastModified: string }> {
-    return this.post('/data/upload', { fileName, content });
+  async getPresignedUrl(fileName: DataFile): Promise<PresignedUrlResponse> {
+    return this.post<PresignedUrlResponse>('/data/uploads/presigned', { fileName });
   }
 
-  async previewMerge(fileName: DataFile, content: string): Promise<MergePreview> {
-    return this.post<MergePreview>('/data/merge/preview', { fileName, content });
+  async completeUpload(uploadId: string, fileName: DataFile, s3Key: string, description?: string): Promise<UploadCompleteResponse> {
+    return this.post<UploadCompleteResponse>('/data/uploads/complete', { uploadId, fileName, s3Key, description });
   }
 
-  async commitMerge(fileName: DataFile, mergeId: string): Promise<{ success: boolean; itemCount: number }> {
-    return this.post('/data/merge/commit', { fileName, mergeId });
+  async listUploads(fileName?: DataFile): Promise<UploadsListResponse> {
+    const query = fileName ? `?fileName=${fileName}` : '';
+    return this.get<UploadsListResponse>(`/data/uploads${query}`);
+  }
+
+  async deleteUpload(uploadId: string): Promise<{ success: boolean }> {
+    return this.del<{ success: boolean }>(`/data/uploads/${uploadId}`);
   }
 }
 

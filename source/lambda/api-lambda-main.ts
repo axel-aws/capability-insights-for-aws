@@ -28,10 +28,11 @@ import {
 import { getSyncSettingsRoute, putSyncSettingsRoute } from './routes/sync-settings-routes';
 import {
   getDataInfoRoute,
-  postDataUploadRoute,
-  postMergePreviewRoute,
-  postMergeCommitRoute,
-} from './routes/data-utilities-routes';
+  postPresignedUrlRoute,
+  postUploadCompleteRoute,
+  getUploadsRoute,
+  deleteUploadRoute,
+} from './routes/data-upload-routes';
 import {
   createPlanRoute,
   listPlansRoute,
@@ -110,11 +111,13 @@ registerParameterizedRoute(HttpMethod.DELETE, '/policies/:policyId/parts/:partIn
 registerRoute(HttpMethod.GET, '/syncSettings', getSyncSettingsRoute);
 registerRoute(HttpMethod.PUT, '/syncSettings', putSyncSettingsRoute);
 
-// Data Utilities routes
+// Data Upload routes
 registerRoute(HttpMethod.GET, '/data/info', getDataInfoRoute);
-registerRoute(HttpMethod.POST, '/data/upload', postDataUploadRoute);
-registerRoute(HttpMethod.POST, '/data/merge/preview', postMergePreviewRoute);
-registerRoute(HttpMethod.POST, '/data/merge/commit', postMergeCommitRoute);
+registerRoute(HttpMethod.POST, '/data/uploads/presigned', postPresignedUrlRoute);
+registerRoute(HttpMethod.POST, '/data/uploads/complete', postUploadCompleteRoute);
+registerRoute(HttpMethod.GET, '/data/uploads', getUploadsRoute);
+
+registerParameterizedRoute(HttpMethod.DELETE, '/data/uploads/:uploadId', deleteUploadRoute);
 
 // Infrastructure Planning routes
 registerRoute(HttpMethod.POST, '/plans', createPlanRoute);

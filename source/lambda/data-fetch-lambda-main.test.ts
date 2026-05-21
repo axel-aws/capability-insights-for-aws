@@ -13,11 +13,13 @@ const lambdaMock = mockClient(LambdaClient);
 // Mock the S3BucketClient
 const mockGetObject = vi.fn();
 const mockPutObject = vi.fn();
+const mockListObjects = vi.fn();
 
 vi.mock('./services/s3-client', () => ({
   S3BucketClient: vi.fn().mockImplementation(() => ({
     getObject: mockGetObject,
     putObject: mockPutObject,
+    listObjects: mockListObjects,
   })),
 }));
 
@@ -63,6 +65,7 @@ describe('Data Fetch Lambda - Terraform Overlay Integration', () => {
     lambdaMock.reset();
     mockGetObject.mockReset();
     mockPutObject.mockReset();
+    mockListObjects.mockReset();
     mockGetSettings.mockReset();
     mockGetToken.mockReset();
 
@@ -74,6 +77,9 @@ describe('Data Fetch Lambda - Terraform Overlay Integration', () => {
       // Return valid JSON for data files
       return Promise.resolve('[]');
     });
+
+    // listObjects returns empty by default (no uploads)
+    mockListObjects.mockResolvedValue([]);
 
     // putObject always succeeds by default
     mockPutObject.mockResolvedValue(undefined);

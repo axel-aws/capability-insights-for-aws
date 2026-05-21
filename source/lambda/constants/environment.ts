@@ -16,6 +16,7 @@ export const EnvironmentKey = {
   PLAN_TABLE_NAME: 'PLAN_TABLE_NAME',
   GITHUB_TOKEN_SECRET_NAME: 'GITHUB_TOKEN_SECRET_NAME',
   GITHUB_FETCH_FUNCTION_NAME: 'GITHUB_FETCH_FUNCTION_NAME',
+  DATA_UPLOADS_TABLE_NAME: 'DATA_UPLOADS_TABLE_NAME',
 } as const;
 
 export type EnvironmentKey = (typeof EnvironmentKey)[keyof typeof EnvironmentKey];
