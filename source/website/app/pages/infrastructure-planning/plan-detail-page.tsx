@@ -213,20 +213,6 @@ export default function PlanDetailPage() {
           variant="h1"
           actions={
             <SpaceBetween direction="horizontal" size="xs">
-              {plan.status === 'ready' && (
-                <Button
-                  variant="primary"
-                  iconName="angle-right-double"
-                  onClick={() => {
-                    const tab = capabilitySet?.cfnResourceTypes?.length ? 'cfn'
-                      : capabilitySet?.apiOperations?.length ? 'apis'
-                      : 'products';
-                    navigate(`/?plan=${encodeURIComponent(plan.planName)}&tab=${tab}`);
-                  }}
-                >
-                  View availability
-                </Button>
-              )}
               <Button
                 iconName="refresh"
                 loading={reprocessing}
@@ -261,7 +247,8 @@ export default function PlanDetailPage() {
         )}
         {plan.status === 'ready' && capabilitySet &&
           capabilitySet.cfnResourceTypes.length === 0 &&
-          capabilitySet.apiOperations.length === 0 && (
+          capabilitySet.apiOperations.length === 0 &&
+          capabilitySet.terraformResourceTypes.length === 0 && (
           <Alert type="warning" header="No resources detected">
             Analysis complete but no AWS resources were detected. This may happen if the repository doesn&apos;t contain supported IaC files in expected locations, or uses patterns not yet supported by the analyzer.
           </Alert>
@@ -322,24 +309,27 @@ export default function PlanDetailPage() {
                     label: `Resource Types (${resourceTypeItems.length})`,
                     id: 'resource-types',
                     content: (
-                      <Table
-                        items={resourceTypeItems}
-                        columnDefinitions={[
-                          {
-                            id: 'type',
-                            header: 'CloudFormation Resource Type',
-                            cell: item => item.type,
-                            sortingField: 'type',
-                          },
-                        ]}
-                        sortingDisabled={false}
-                        variant="embedded"
-                        empty={
-                          <Box textAlign="center" color="inherit">
-                            No CloudFormation resource types extracted.
-                          </Box>
-                        }
-                      />
+                      <SpaceBetween size="m">
+                        <Button variant="primary" iconName="angle-right-double" onClick={() => navigate(`/?plan=${encodeURIComponent(plan.planName)}&tab=cfn`)}>View availability</Button>
+                        <Table
+                          items={resourceTypeItems}
+                          columnDefinitions={[
+                            {
+                              id: 'type',
+                              header: 'CloudFormation Resource Type',
+                              cell: item => item.type,
+                              sortingField: 'type',
+                            },
+                          ]}
+                          sortingDisabled={false}
+                          variant="embedded"
+                          empty={
+                            <Box textAlign="center" color="inherit">
+                              No CloudFormation resource types extracted.
+                            </Box>
+                          }
+                        />
+                      </SpaceBetween>
                     ),
                   },
                   ...(capabilitySet.terraformResourceTypes.length > 0
@@ -348,30 +338,33 @@ export default function PlanDetailPage() {
                           label: `Terraform Types (${capabilitySet.terraformResourceTypes.length})`,
                           id: 'terraform-types',
                           content: (
-                            <Table
-                              items={terraformTypeItems}
-                              columnDefinitions={[
-                                {
-                                  id: 'type',
-                                  header: 'Terraform Resource Type',
-                                  cell: (item: { type: string; category: 'Terraform'; cfnMapping: string }) => item.type,
-                                  sortingField: 'type',
-                                },
-                                {
-                                  id: 'cfnMapping',
-                                  header: 'CloudFormation Mapping',
-                                  cell: (item: { type: string; category: 'Terraform'; cfnMapping: string }) => item.cfnMapping,
-                                  sortingField: 'cfnMapping',
-                                },
-                              ]}
-                              sortingDisabled={false}
-                              variant="embedded"
-                              empty={
-                                <Box textAlign="center" color="inherit">
-                                  No Terraform resource types extracted.
-                                </Box>
-                              }
-                            />
+                            <SpaceBetween size="m">
+                              <Button variant="primary" iconName="angle-right-double" onClick={() => navigate(`/?plan=${encodeURIComponent(plan.planName)}&tab=cfn`)}>View availability</Button>
+                              <Table
+                                items={terraformTypeItems}
+                                columnDefinitions={[
+                                  {
+                                    id: 'type',
+                                    header: 'Terraform Resource Type',
+                                    cell: (item: { type: string; category: 'Terraform'; cfnMapping: string }) => item.type,
+                                    sortingField: 'type',
+                                  },
+                                  {
+                                    id: 'cfnMapping',
+                                    header: 'CloudFormation Mapping',
+                                    cell: (item: { type: string; category: 'Terraform'; cfnMapping: string }) => item.cfnMapping,
+                                    sortingField: 'cfnMapping',
+                                  },
+                                ]}
+                                sortingDisabled={false}
+                                variant="embedded"
+                                empty={
+                                  <Box textAlign="center" color="inherit">
+                                    No Terraform resource types extracted.
+                                  </Box>
+                                }
+                              />
+                            </SpaceBetween>
                           ),
                         },
                       ]
@@ -380,48 +373,54 @@ export default function PlanDetailPage() {
                     label: `API Operations (${capabilitySet.apiOperations.length})`,
                     id: 'api-operations',
                     content: (
-                      <Table
-                        items={apiOperationItems}
-                        columnDefinitions={[
-                          {
-                            id: 'operation',
-                            header: 'API Operation',
-                            cell: item => item.operation,
-                            sortingField: 'operation',
-                          },
-                        ]}
-                        sortingDisabled={false}
-                        variant="embedded"
-                        empty={
-                          <Box textAlign="center" color="inherit">
-                            No API operations extracted.
-                          </Box>
-                        }
-                      />
+                      <SpaceBetween size="m">
+                        <Button variant="primary" iconName="angle-right-double" onClick={() => navigate(`/?plan=${encodeURIComponent(plan.planName)}&tab=apis`)}>View availability</Button>
+                        <Table
+                          items={apiOperationItems}
+                          columnDefinitions={[
+                            {
+                              id: 'operation',
+                              header: 'API Operation',
+                              cell: item => item.operation,
+                              sortingField: 'operation',
+                            },
+                          ]}
+                          sortingDisabled={false}
+                          variant="embedded"
+                          empty={
+                            <Box textAlign="center" color="inherit">
+                              No API operations extracted.
+                            </Box>
+                          }
+                        />
+                      </SpaceBetween>
                     ),
                   },
                   {
                     label: `Services (${capabilitySet.serviceNames.filter(n => n !== 'CDK').length})`,
                     id: 'services',
                     content: (
-                      <Table
-                        items={capabilitySet.serviceNames.filter(n => n !== 'CDK').map(name => ({ name }))}
-                        columnDefinitions={[
-                          {
-                            id: 'name',
-                            header: 'Service Name',
-                            cell: item => item.name,
-                            sortingField: 'name',
-                          },
-                        ]}
-                        sortingDisabled={false}
-                        variant="embedded"
-                        empty={
-                          <Box textAlign="center" color="inherit">
-                            No service names derived.
-                          </Box>
-                        }
-                      />
+                      <SpaceBetween size="m">
+                        <Button variant="primary" iconName="angle-right-double" onClick={() => navigate(`/?plan=${encodeURIComponent(plan.planName)}&tab=products`)}>View availability</Button>
+                        <Table
+                          items={capabilitySet.serviceNames.filter(n => n !== 'CDK').map(name => ({ name }))}
+                          columnDefinitions={[
+                            {
+                              id: 'name',
+                              header: 'Service Name',
+                              cell: item => item.name,
+                              sortingField: 'name',
+                            },
+                          ]}
+                          sortingDisabled={false}
+                          variant="embedded"
+                          empty={
+                            <Box textAlign="center" color="inherit">
+                              No service names derived.
+                            </Box>
+                          }
+                        />
+                      </SpaceBetween>
                     ),
                   },
                 ]}
