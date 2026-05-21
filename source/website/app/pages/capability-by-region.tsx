@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useCallback, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import ContentLayout from '@cloudscape-design/components/content-layout';
 import Header from '@cloudscape-design/components/header';
 import SpaceBetween from '@cloudscape-design/components/space-between';
@@ -10,6 +11,7 @@ import Popover from '@cloudscape-design/components/popover';
 import StatusIndicator from '@cloudscape-design/components/status-indicator';
 import Container from '@cloudscape-design/components/container';
 import Button from '@cloudscape-design/components/button';
+import type { PropertyFilterQuery, PropertyFilterToken } from '@cloudscape-design/collection-hooks';
 
 import { APP_NAME, PAGE_CAPABILITY_BY_REGION } from '~/constants/app';
 import type { Region } from '@capability-insights/shared/types/capability/region';
@@ -43,6 +45,30 @@ export function meta() {
 export default function CapabilityByRegion() {
   const { setToolsContent } = useHelpPanel();
   useEffect(() => { setToolsContent(<CapabilityByRegionHelpPanel />); }, []);
+
+  const [searchParams] = useSearchParams();
+  const planParam = searchParams.get('plan');
+  const tabParam = searchParams.get('tab');
+
+  const [activeTabId, setActiveTabId] = useState(tabParam || 'products');
+
+  // Track region filter tokens across tab switches
+  const regionTokensRef = useRef<PropertyFilterToken[]>([]);
+
+  const handleFilterChange = useCallback((query: PropertyFilterQuery) => {
+    const tokens = (query.tokens ?? []) as PropertyFilterToken[];
+    regionTokensRef.current = tokens.filter(t => t.propertyKey?.startsWith('region:'));
+  }, []);
+
+  const initialQuery = useMemo<PropertyFilterQuery | undefined>(() => {
+    const tokens: PropertyFilterToken[] = [];
+    if (planParam) {
+      tokens.push({ propertyKey: 'plan', operator: '=', value: planParam });
+    }
+    tokens.push(...regionTokensRef.current);
+    if (tokens.length === 0) return undefined;
+    return { operation: 'and', tokens };
+  }, [planParam, activeTabId]);
 
   const [regions, setRegions] = useState<Region[]>([]);
   const [productRows, setProductRows] = useState<ProductAvailability[]>([]);
@@ -195,6 +221,8 @@ export default function CapabilityByRegion() {
         )}
 
         <Tabs
+          activeTabId={activeTabId}
+          onChange={({ detail }) => setActiveTabId(detail.activeTabId)}
           tabs={[
             {
               label: 'Services and features',
@@ -205,6 +233,8 @@ export default function CapabilityByRegion() {
                   loading={loading}
                   productRows={productRows}
                   downloadUrls={capabilityInsightsClient.exportUrls(DataFile.PRODUCTS)}
+                  initialQuery={initialQuery}
+                  onFilterChange={handleFilterChange}
                 />
               ),
             },
@@ -220,6 +250,8 @@ export default function CapabilityByRegion() {
                   apiViewMode={apiViewMode}
                   onApiViewModeChange={setApiViewMode}
                   downloadUrls={capabilityInsightsClient.exportUrls(DataFile.APIS)}
+                  initialQuery={initialQuery}
+                  onFilterChange={handleFilterChange}
                 />
               ),
             },
@@ -233,6 +265,8 @@ export default function CapabilityByRegion() {
                   cfnRows={cfnRows}
                   overlay={overlay}
                   downloadUrls={capabilityInsightsClient.exportUrls(DataFile.CFN_RESOURCES)}
+                  initialQuery={initialQuery}
+                  onFilterChange={handleFilterChange}
                 />
               ),
             },

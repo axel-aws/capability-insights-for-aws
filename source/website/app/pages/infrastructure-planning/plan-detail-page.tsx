@@ -211,6 +211,20 @@ export default function PlanDetailPage() {
           variant="h1"
           actions={
             <SpaceBetween direction="horizontal" size="xs">
+              {plan.status === 'ready' && (
+                <Button
+                  variant="primary"
+                  iconName="angle-right-double"
+                  onClick={() => {
+                    const tab = capabilitySet?.cfnResourceTypes?.length ? 'cfn'
+                      : capabilitySet?.apiOperations?.length ? 'apis'
+                      : 'products';
+                    navigate(`/?plan=${encodeURIComponent(plan.planName)}&tab=${tab}`);
+                  }}
+                >
+                  View availability
+                </Button>
+              )}
               <Button
                 iconName="refresh"
                 loading={reprocessing}

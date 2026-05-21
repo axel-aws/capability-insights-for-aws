@@ -5,6 +5,7 @@ import Button from '@cloudscape-design/components/button';
 
 import type { CfnAvailability } from '@capability-insights/shared/types/availability/regional-availability';
 import type { ExportUrls } from '~/clients/capability-insights-client';
+import type { PropertyFilterQuery } from '@cloudscape-design/collection-hooks';
 import type { UseTerraformOverlayResult } from '~/hooks/use-terraform-overlay';
 import AvailabilityTable from '~/components/availability/availability-table';
 import RegionalAvailabilityTypeBadge from '~/components/availability/regional-availability-type-badge';
@@ -18,6 +19,8 @@ export interface CfnResourcesTabProps extends SharedTabProps {
   cfnRows: CfnAvailability[];
   overlay: UseTerraformOverlayResult;
   downloadUrls: ExportUrls;
+  initialQuery?: PropertyFilterQuery;
+  onFilterChange?: (query: PropertyFilterQuery) => void;
 }
 
 export default function CfnResourcesTab({
@@ -26,6 +29,8 @@ export default function CfnResourcesTab({
   cfnRows,
   overlay,
   downloadUrls,
+  initialQuery,
+  onFilterChange,
 }: CfnResourcesTabProps) {
   const { setToolsContent, setToolsOpen } = useHelpPanel();
   const translatedCfnRows = overlay.translateRows(cfnRows);
@@ -66,6 +71,8 @@ export default function CfnResourcesTab({
         regions={regions}
         regionalAvailability={translatedCfnRows}
         downloadUrls={downloadUrls}
+        initialQuery={initialQuery}
+        onFilterChange={onFilterChange}
         nameCell={row => {
           let href = row.homepageUrl;
           if (overlay.convention === 'terraform-awscc' && row.name.startsWith('awscc_')) {

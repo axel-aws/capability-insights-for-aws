@@ -27,6 +27,8 @@ export interface ApiOperationsTabProps extends SharedTabProps {
   apiViewMode: ApiViewMode;
   onApiViewModeChange: (mode: ApiViewMode) => void;
   downloadUrls: ExportUrls;
+  initialQuery?: PropertyFilterQuery;
+  onFilterChange?: (query: PropertyFilterQuery) => void;
 }
 
 export default function ApiOperationsTab({
@@ -37,6 +39,8 @@ export default function ApiOperationsTab({
   apiViewMode,
   onApiViewModeChange,
   downloadUrls,
+  initialQuery,
+  onFilterChange,
 }: ApiOperationsTabProps) {
   const { setToolsContent, setToolsOpen } = useHelpPanel();
 
@@ -235,6 +239,8 @@ export default function ApiOperationsTab({
           regions={regions}
           regionalAvailability={apiRows}
           downloadUrls={downloadUrls}
+          initialQuery={initialQuery}
+          onFilterChange={onFilterChange}
           nameCell={row => (
             <SpaceBetween direction="horizontal" size="xs">
               {row.homepageUrl ? (
@@ -257,6 +263,8 @@ export default function ApiOperationsTab({
           regions={regions}
           regionalAvailability={classicApi.rows}
           downloadUrls={downloadUrls}
+          initialQuery={initialQuery}
+          onFilterChange={onFilterChange}
           nameCell={row => {
             const isResource = row.regionalAvailabilityType === RegionalAvailabilityType.RESOURCE_TYPE;
             const registryUrl = isResource && row.name.startsWith('aws_')

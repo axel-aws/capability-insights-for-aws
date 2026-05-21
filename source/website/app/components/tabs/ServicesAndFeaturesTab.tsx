@@ -4,6 +4,7 @@ import Link from '@cloudscape-design/components/link';
 import type { Region } from '@capability-insights/shared/types/capability/region';
 import type { ProductAvailability } from '@capability-insights/shared/types/availability/regional-availability';
 import type { ExportUrls } from '~/clients/capability-insights-client';
+import type { PropertyFilterQuery } from '@cloudscape-design/collection-hooks';
 import AvailabilityTable from '~/components/availability/availability-table';
 import RegionalAvailabilityTypeBadge from '~/components/availability/regional-availability-type-badge';
 
@@ -15,6 +16,8 @@ export interface SharedTabProps {
 export interface ServicesAndFeaturesTabProps extends SharedTabProps {
   productRows: ProductAvailability[];
   downloadUrls: ExportUrls;
+  initialQuery?: PropertyFilterQuery;
+  onFilterChange?: (query: PropertyFilterQuery) => void;
 }
 
 export default function ServicesAndFeaturesTab({
@@ -22,6 +25,8 @@ export default function ServicesAndFeaturesTab({
   loading,
   productRows,
   downloadUrls,
+  initialQuery,
+  onFilterChange,
 }: ServicesAndFeaturesTabProps) {
   return (
     <AvailabilityTable
@@ -30,6 +35,8 @@ export default function ServicesAndFeaturesTab({
       regions={regions}
       regionalAvailability={productRows}
       downloadUrls={downloadUrls}
+      initialQuery={initialQuery}
+      onFilterChange={onFilterChange}
       nameCell={row => (
         <SpaceBetween direction="horizontal" size="xs">
           {row.homepageUrl ? (

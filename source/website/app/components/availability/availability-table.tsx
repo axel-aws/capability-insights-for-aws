@@ -51,6 +51,8 @@ interface AvailabilityTableProps<T extends RegionalAvailability> {
   customFilteringFunction?: (item: T, query: PropertyFilterQuery) => boolean;
   /** Optional additional actions to render in the table header alongside the default actions. */
   headerActions?: React.ReactNode;
+  /** Callback when the PropertyFilter query changes. Used to persist region filters across tabs. */
+  onFilterChange?: (query: PropertyFilterQuery) => void;
 }
 
 export default function AvailabilityTable<T extends RegionalAvailability>({
@@ -67,6 +69,7 @@ export default function AvailabilityTable<T extends RegionalAvailability>({
   availabilityCell,
   customFilteringFunction,
   headerActions,
+  onFilterChange,
 }: AvailabilityTableProps<T>) {
   const [preferences, setPreferences] = useState<CollectionPreferencesProps.Preferences>({
     stickyColumns: { first: 1, last: 0 },
@@ -311,8 +314,13 @@ export default function AvailabilityTable<T extends RegionalAvailability>({
 
   const allExpanded = hasNesting && (collectionProps.expandableRows?.expandedItems.length ?? 0) > 0;
 
-  // Auto-expand when filter narrows to 5 or fewer parent services
+  // Notify parent of filter changes for cross-tab persistence
   const filterQuery = propertyFilterProps.query;
+  useEffect(() => {
+    if (onFilterChange) onFilterChange(filterQuery);
+  }, [filterQuery, onFilterChange]);
+
+  // Auto-expand when filter narrows to 5 or fewer parent services
   useEffect(() => {
     if (!hasNesting || !actions.setExpandedItems) return;
     const hasActiveFilter = (filterQuery.tokens?.length ?? 0) > 0;
