@@ -9,6 +9,8 @@ import ColumnLayout from '@cloudscape-design/components/column-layout';
 import Link from '@cloudscape-design/components/link';
 import Popover from '@cloudscape-design/components/popover';
 import StatusIndicator from '@cloudscape-design/components/status-indicator';
+import Container from '@cloudscape-design/components/container';
+import Button from '@cloudscape-design/components/button';
 
 import { APP_NAME, PAGE_CAPABILITY_BY_REGION } from '~/constants/app';
 import type { Region } from '@capability-insights/shared/types/capability/region';
@@ -72,6 +74,15 @@ export default function CapabilityByRegion() {
   const [apiViewMode, setApiViewMode] = useState<ApiViewMode>('api-operations');
   const classicApi = useClassicApiAvailability(apiRows, regions);
 
+  const [showWelcome, setShowWelcome] = useState(
+    () => localStorage.getItem('capabilityInsights_onboardingDismissed') !== 'true',
+  );
+
+  const handleDismissWelcome = () => {
+    setShowWelcome(false);
+    localStorage.setItem('capabilityInsights_onboardingDismissed', 'true');
+  };
+
   const cfnTabLabel =
     overlay.convention === 'cloudformation'
       ? 'CloudFormation resources'
@@ -133,6 +144,54 @@ export default function CapabilityByRegion() {
       }
     >
       <SpaceBetween size="l">
+        {showWelcome && (
+          <Container
+            header={
+              <Header
+                variant="h2"
+                actions={<Button variant="icon" iconName="close" onClick={handleDismissWelcome} ariaLabel="Dismiss welcome" />}
+              >
+                Welcome to Capability Insights for AWS
+              </Header>
+            }
+          >
+            <SpaceBetween size="m">
+              <Box variant="p">
+                Understand what&apos;s available where across AWS. Browse regional availability for every AWS service, API, and CloudFormation resource type — then use that data to plan and protect your deployments.
+              </Box>
+              <ColumnLayout columns={3}>
+                <Container>
+                  <SpaceBetween size="xs">
+                    <Box variant="h3">Browse Availability</Box>
+                    <Box variant="p" color="text-body-secondary">
+                      Search and filter availability data for 160+ AWS services across 39 regions.
+                    </Box>
+                    <Box><Link href="/" variant="primary">Browse capabilities</Link></Box>
+                  </SpaceBetween>
+                </Container>
+                <Container>
+                  <SpaceBetween size="xs">
+                    <Box variant="h3">Plan Your Infrastructure</Box>
+                    <Box variant="p" color="text-body-secondary">
+                      Upload a template or connect a repo to see where YOUR stack will work.
+                    </Box>
+                    <Box><Link href="/infrastructure-planning" variant="primary">Go to Infrastructure Planning</Link></Box>
+                  </SpaceBetween>
+                </Container>
+                <Container>
+                  <SpaceBetween size="xs">
+                    <Box variant="h3">Enforce Region Safety</Box>
+                    <Box variant="p" color="text-body-secondary">
+                      Generate IAM policies that prevent calls to APIs unavailable in your target regions.
+                    </Box>
+                    <Box><Link href="/policy-enforcer" variant="primary">Go to Policy Enforcer</Link></Box>
+                  </SpaceBetween>
+                </Container>
+              </ColumnLayout>
+            </SpaceBetween>
+          </Container>
+        )}
+
         <ColumnLayout columns={4} variant="text-grid">
           <AvailabilityStatCard
             label="Services &amp; features"
