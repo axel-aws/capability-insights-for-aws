@@ -13,7 +13,6 @@ import ButtonDropdown from '@cloudscape-design/components/button-dropdown';
 import Flashbar from '@cloudscape-design/components/flashbar';
 import type { Region } from '@capability-insights/shared/types/capability/region';
 import type { RegionalAvailability } from '@capability-insights/shared/types/availability/regional-availability';
-import { AvailabilityStatus } from '@capability-insights/shared/types/availability/availability-status';
 import type { StackResourcesResponse } from '@capability-insights/shared/types/capability/stack';
 import type { CapabilitySet } from '@capability-insights/shared/types/infrastructure-planning/plan-configuration';
 import type { ExportUrls } from '~/clients/capability-insights-client';
@@ -334,13 +333,8 @@ export default function AvailabilityTable<T extends RegionalAvailability>({
     }
   }, [filteredItemsCount]);
 
-  const regionOptionValues = Object.values(AvailabilityStatus);
-  const regionFilteringOptions = regions.flatMap(r =>
-    regionOptionValues.map(status => ({ propertyKey: `region:${r.Region}`, value: status })),
-  );
   const filteringOptions = [
     ...propertyFilterProps.filteringOptions,
-    ...regionFilteringOptions,
     ...(includeStackProperty ? stackFilteringOptions : []),
     ...(includePlanProperty ? planFilteringOptions : []),
   ];

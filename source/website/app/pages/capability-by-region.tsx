@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useMemo, useRef, useState } from 'react';
+import { useEffect, useCallback, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import ContentLayout from '@cloudscape-design/components/content-layout';
 import Header from '@cloudscape-design/components/header';
@@ -11,7 +11,7 @@ import Popover from '@cloudscape-design/components/popover';
 import StatusIndicator from '@cloudscape-design/components/status-indicator';
 import Container from '@cloudscape-design/components/container';
 import Button from '@cloudscape-design/components/button';
-import type { PropertyFilterQuery, PropertyFilterToken } from '@cloudscape-design/collection-hooks';
+import type { PropertyFilterQuery } from '@cloudscape-design/collection-hooks';
 
 import { APP_NAME, PAGE_CAPABILITY_BY_REGION } from '~/constants/app';
 import type { Region } from '@capability-insights/shared/types/capability/region';
@@ -54,23 +54,12 @@ export default function CapabilityByRegion() {
 
   const [activeTabId, setActiveTabId] = useState(tabParam || 'products');
 
-  // Track region filter tokens across tab switches
-  const regionTokensRef = useRef<PropertyFilterToken[]>([]);
-
-  const handleFilterChange = useCallback((query: PropertyFilterQuery) => {
-    const tokens = (query.tokens ?? []) as PropertyFilterToken[];
-    regionTokensRef.current = tokens.filter(t => t.propertyKey?.startsWith('region:'));
-  }, []);
+  const handleFilterChange = useCallback((_query: PropertyFilterQuery) => {}, []);
 
   const initialQuery = useMemo<PropertyFilterQuery | undefined>(() => {
-    const tokens: PropertyFilterToken[] = [];
-    if (planParam) {
-      tokens.push({ propertyKey: 'plan', operator: '=', value: planParam });
-    }
-    tokens.push(...regionTokensRef.current);
-    if (tokens.length === 0) return undefined;
-    return { operation: 'and', tokens };
-  }, [planParam, activeTabId]);
+    if (!planParam) return undefined;
+    return { operation: 'and', tokens: [{ propertyKey: 'plan', operator: '=', value: planParam }] };
+  }, [planParam]);
 
   const [regions, setRegions] = useState<Region[]>([]);
   const [visibleRegionCodes, setVisibleRegionCodes] = useState<Set<string> | null>(null);
