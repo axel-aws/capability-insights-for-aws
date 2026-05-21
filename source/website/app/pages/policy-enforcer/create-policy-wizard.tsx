@@ -126,7 +126,13 @@ export default function CreatePolicyWizard() {
     setSubmitError(null);
     try {
       const request = buildCreateRequest();
-      await policyEnforcerClient.createPolicy(request);
+      const created = await policyEnforcerClient.createPolicy(request);
+      // Auto-trigger refresh so the policy generates immediately
+      try {
+        await policyEnforcerClient.refreshPolicy(created.policyId);
+      } catch {
+        // Non-fatal: user can manually refresh from the detail page
+      }
       navigate('/policy-enforcer');
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Failed to create policy.');
@@ -176,6 +182,9 @@ export default function CreatePolicyWizard() {
             description: 'Provide a name and optional details for your policy configuration.',
             content: (
               <SpaceBetween size="l">
+                <Alert type="info">
+                  A policy generates an IAM allow-list based on which APIs are actually available in your selected regions. Attach it to an IAM role to prevent calls to unavailable APIs.
+                </Alert>
                 <PolicyDetailsFields
                   policyName={state.policyName}
                   onPolicyNameChange={v => setState(prev => ({ ...prev, policyName: v }))}

@@ -175,7 +175,7 @@ export default function PolicyEnforcerPage() {
       header={
         <Header
           variant="h1"
-          description="Create and manage policies that restrict AWS capabilities based on regional availability."
+          description="Generate IAM policies that protect your workloads from calling APIs unavailable in your target regions. Attach these to IAM roles to proactively prevent region expansion failures before they happen at deploy time."
         >
           {PAGE_POLICY_ENFORCER}
         </Header>
@@ -298,9 +298,9 @@ export default function PolicyEnforcerPage() {
         empty={
           <Box textAlign="center" color="inherit">
             <SpaceBetween size="m">
-              <b>No policy configurations</b>
+              <b>No policies yet</b>
               <Box variant="p" color="inherit">
-                You haven&apos;t created any policy configurations yet.
+                Create a policy to generate an IAM allow-list scoped to your target regions. When attached to a role, it prevents your workload from calling APIs that aren&apos;t available, catching region gaps before deployment.
               </Box>
               <Button variant="primary" onClick={() => navigate('/policy-enforcer/create')}>
                 Create Policy
