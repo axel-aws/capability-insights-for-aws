@@ -18,6 +18,7 @@ export interface ServicesAndFeaturesTabProps extends SharedTabProps {
   downloadUrls: ExportUrls;
   initialQuery?: PropertyFilterQuery;
   onFilterChange?: (query: PropertyFilterQuery) => void;
+  headerActions?: React.ReactNode;
 }
 
 export default function ServicesAndFeaturesTab({
@@ -27,6 +28,7 @@ export default function ServicesAndFeaturesTab({
   downloadUrls,
   initialQuery,
   onFilterChange,
+  headerActions,
 }: ServicesAndFeaturesTabProps) {
   return (
     <AvailabilityTable
@@ -37,6 +39,7 @@ export default function ServicesAndFeaturesTab({
       downloadUrls={downloadUrls}
       initialQuery={initialQuery}
       onFilterChange={onFilterChange}
+      headerActions={headerActions}
       nameCell={row => (
         <SpaceBetween direction="horizontal" size="xs">
           {row.homepageUrl ? (

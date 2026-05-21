@@ -29,6 +29,7 @@ export interface ApiOperationsTabProps extends SharedTabProps {
   downloadUrls: ExportUrls;
   initialQuery?: PropertyFilterQuery;
   onFilterChange?: (query: PropertyFilterQuery) => void;
+  headerActions?: React.ReactNode;
 }
 
 export default function ApiOperationsTab({
@@ -41,6 +42,7 @@ export default function ApiOperationsTab({
   downloadUrls,
   initialQuery,
   onFilterChange,
+  headerActions,
 }: ApiOperationsTabProps) {
   const { setToolsContent, setToolsOpen } = useHelpPanel();
 
@@ -255,6 +257,7 @@ export default function ApiOperationsTab({
           )}
           loading={loading}
           includePlanProperty
+          headerActions={headerActions}
         />
       ) : (
         <AvailabilityTable
@@ -311,15 +314,18 @@ export default function ApiOperationsTab({
           customFilteringFunction={terraformFilteringFunction}
           includePlanProperty
           headerActions={
-            <Button
-              iconName="status-info"
-              variant="icon"
-              ariaLabel="Info about Terraform AWS availability"
-              onClick={() => {
-                setToolsContent(<TerraformAwsHelpPanel />);
-                setToolsOpen(true);
-              }}
-            />
+            <>
+              {headerActions}
+              <Button
+                iconName="status-info"
+                variant="icon"
+                ariaLabel="Info about Terraform AWS availability"
+                onClick={() => {
+                  setToolsContent(<TerraformAwsHelpPanel />);
+                  setToolsOpen(true);
+                }}
+              />
+            </>
           }
         />
       )}

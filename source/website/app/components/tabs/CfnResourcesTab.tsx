@@ -21,6 +21,7 @@ export interface CfnResourcesTabProps extends SharedTabProps {
   downloadUrls: ExportUrls;
   initialQuery?: PropertyFilterQuery;
   onFilterChange?: (query: PropertyFilterQuery) => void;
+  headerActions?: React.ReactNode;
 }
 
 export default function CfnResourcesTab({
@@ -31,6 +32,7 @@ export default function CfnResourcesTab({
   downloadUrls,
   initialQuery,
   onFilterChange,
+  headerActions: externalHeaderActions,
 }: CfnResourcesTabProps) {
   const { setToolsContent, setToolsOpen } = useHelpPanel();
   const translatedCfnRows = overlay.translateRows(cfnRows);
@@ -95,12 +97,15 @@ export default function CfnResourcesTab({
         includeStackProperty
         includePlanProperty
         headerActions={
-          <Button
-            iconName="status-info"
-            variant="icon"
-            ariaLabel="Info"
-            onClick={handleInfoClick}
-          />
+          <>
+            {externalHeaderActions}
+            <Button
+              iconName="status-info"
+              variant="icon"
+              ariaLabel="Info"
+              onClick={handleInfoClick}
+            />
+          </>
         }
       />
     </SpaceBetween>

@@ -32,6 +32,7 @@ import type {
 import ServicesAndFeaturesTab from '~/components/tabs/ServicesAndFeaturesTab';
 import ApiOperationsTab from '~/components/tabs/ApiOperationsTab';
 import CfnResourcesTab from '~/components/tabs/CfnResourcesTab';
+import RegionSelectorModal from '~/components/availability/region-selector-modal';
 import CapabilityByRegionHelpPanel from '~/components/help/CapabilityByRegionHelpPanel';
 import { useHelpPanel } from '~/contexts/help-panel-context';
 
@@ -72,6 +73,7 @@ export default function CapabilityByRegion() {
   }, [planParam, activeTabId]);
 
   const [regions, setRegions] = useState<Region[]>([]);
+  const [visibleRegionCodes, setVisibleRegionCodes] = useState<Set<string> | null>(null);
   const [productRows, setProductRows] = useState<ProductAvailability[]>([]);
   const [apiRows, setApiRows] = useState<ApiAvailability[]>([]);
   const [cfnRows, setCfnRows] = useState<CfnAvailability[]>([]);
@@ -99,6 +101,19 @@ export default function CapabilityByRegion() {
 
   // Hooks needed for stat cards and tab labels — called at page level
   const overlay = useTerraformOverlay(cfnRows);
+
+  const visibleRegions = useMemo(
+    () => visibleRegionCodes ? regions.filter(r => visibleRegionCodes.has(r.Region)) : regions,
+    [regions, visibleRegionCodes],
+  );
+
+  const regionSelector = (
+    <RegionSelectorModal
+      regions={regions}
+      selectedRegionCodes={visibleRegionCodes ?? new Set(regions.map(r => r.Region))}
+      onSelectionChange={setVisibleRegionCodes}
+    />
+  );
 
   const [apiViewMode, setApiViewMode] = useState<ApiViewMode>('api-operations');
   const classicApi = useClassicApiAvailability(apiRows, regions);
@@ -230,12 +245,13 @@ export default function CapabilityByRegion() {
               id: 'products',
               content: (
                 <ServicesAndFeaturesTab
-                  regions={regions}
+                  regions={visibleRegions}
                   loading={loading}
                   productRows={productRows}
                   downloadUrls={capabilityInsightsClient.exportUrls(DataFile.PRODUCTS)}
                   initialQuery={initialQuery}
                   onFilterChange={handleFilterChange}
+                  headerActions={regionSelector}
                 />
               ),
             },
@@ -244,7 +260,7 @@ export default function CapabilityByRegion() {
               id: 'apis',
               content: (
                 <ApiOperationsTab
-                  regions={regions}
+                  regions={visibleRegions}
                   loading={loading}
                   apiRows={apiRows}
                   classicApi={classicApi}
@@ -253,6 +269,7 @@ export default function CapabilityByRegion() {
                   downloadUrls={capabilityInsightsClient.exportUrls(DataFile.APIS)}
                   initialQuery={initialQuery}
                   onFilterChange={handleFilterChange}
+                  headerActions={regionSelector}
                 />
               ),
             },
@@ -261,13 +278,14 @@ export default function CapabilityByRegion() {
               id: 'cfn',
               content: (
                 <CfnResourcesTab
-                  regions={regions}
+                  regions={visibleRegions}
                   loading={loading}
                   cfnRows={cfnRows}
                   overlay={overlay}
                   downloadUrls={capabilityInsightsClient.exportUrls(DataFile.CFN_RESOURCES)}
                   initialQuery={initialQuery}
                   onFilterChange={handleFilterChange}
+                  headerActions={regionSelector}
                 />
               ),
             },
