@@ -113,7 +113,7 @@ export class CapabilityInsightsSampleEnvironmentStack extends cdk.Stack {
             Principal: '*',
             Action: ['s3:PutObject', 's3:DeleteObject'],
             Resource: cdk.Fn.sub(
-              'arn:${AWS::Partition}:s3:::capability-insights-website-${AWS::AccountId}-${AWS::Region}/data/plans/*',
+              'arn:${AWS::Partition}:s3:::capability-insights-website-${AWS::AccountId}-${AWS::Region}/data/*',
             ),
           },
         ],

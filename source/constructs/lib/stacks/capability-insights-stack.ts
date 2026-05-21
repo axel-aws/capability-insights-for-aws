@@ -783,7 +783,7 @@ export class CapabilityInsightsStack extends cdk.Stack {
               {
                 Effect: 'Allow',
                 Action: ['s3:PutObject', 's3:DeleteObject'],
-                Resource: cdk.Fn.sub('${BucketArn}/data/plans/*', {
+                Resource: cdk.Fn.sub('${BucketArn}/data/*', {
                   BucketArn: cdk.Fn.getAtt(websiteBucket.logicalId, 'Arn').toString(),
                 }),
               },
