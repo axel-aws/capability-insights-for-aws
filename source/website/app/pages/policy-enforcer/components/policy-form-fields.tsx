@@ -17,6 +17,7 @@ import type { MultiselectProps } from '@cloudscape-design/components/multiselect
 import type { ExceptionEntry } from '@capability-insights/shared/types/policy-enforcer/policy-configuration';
 import { capabilityInsightsClient } from '~/clients/capability-insights-client';
 import type { Region } from '@capability-insights/shared/types/capability/region';
+import { getRegionCluster } from '~/constants/region-clusters';
 
 export const EXCEPTION_PATTERN = /^[a-zA-Z0-9-]+:(([A-Z][a-zA-Z0-9]*)|(\*))$/;
 
@@ -70,6 +71,7 @@ interface RegionSelectionFieldProps {
   selectedRegions: ReadonlyArray<MultiselectProps.Option>;
   onSelectedRegionsChange: (options: ReadonlyArray<MultiselectProps.Option>) => void;
   regionOptions: MultiselectProps.Option[];
+  regions: Region[];
   regionsLoading: boolean;
 }
 
@@ -77,26 +79,50 @@ export function RegionSelectionField({
   selectedRegions,
   onSelectedRegionsChange,
   regionOptions,
+  regions,
   regionsLoading,
 }: RegionSelectionFieldProps) {
+  const selectByCluster = (cluster: string) => {
+    const codes = new Set(regions.filter(r => getRegionCluster(r) === cluster).map(r => r.Region));
+    const opts = regionOptions.filter(o => codes.has(o.value!));
+    const existing = selectedRegions.filter(o => !codes.has(o.value!));
+    onSelectedRegionsChange([...existing, ...opts]);
+  };
+
+  const selectAllCommercial = () => {
+    const codes = new Set(regions.filter(r => r.Partition === 'aws').map(r => r.Region));
+    const opts = regionOptions.filter(o => codes.has(o.value!));
+    onSelectedRegionsChange(opts);
+  };
+
   return (
     <Container header={<Header variant="h2">Region selection</Header>}>
-      <FormField
-        label="Target regions"
-        description="The policy will restrict capabilities based on availability in these regions."
-        constraintText="At least one region is required."
-      >
-        <Multiselect
-          selectedOptions={selectedRegions}
-          onChange={({ detail }) => onSelectedRegionsChange(detail.selectedOptions)}
-          options={regionOptions}
-          loadingText="Loading regions..."
-          placeholder="Select regions"
-          filteringType="auto"
-          tokenLimit={5}
-          statusType={regionsLoading ? 'loading' : 'finished'}
-        />
-      </FormField>
+      <SpaceBetween size="m">
+        <SpaceBetween direction="horizontal" size="xs">
+          <Button variant="inline-link" onClick={() => selectByCluster('United States')}>United States</Button>
+          <Button variant="inline-link" onClick={() => selectByCluster('Europe')}>Europe</Button>
+          <Button variant="inline-link" onClick={() => selectByCluster('Asia Pacific')}>Asia Pacific</Button>
+          <Button variant="inline-link" onClick={selectAllCommercial}>All commercial</Button>
+          <Button variant="inline-link" onClick={() => selectByCluster('AWS GovCloud')}>GovCloud</Button>
+          <Button variant="inline-link" onClick={() => onSelectedRegionsChange([])}>Clear all</Button>
+        </SpaceBetween>
+        <FormField
+          label="Target regions"
+          description="The policy will restrict capabilities based on availability in these regions."
+          constraintText="At least one region is required."
+        >
+          <Multiselect
+            selectedOptions={selectedRegions}
+            onChange={({ detail }) => onSelectedRegionsChange(detail.selectedOptions)}
+            options={regionOptions}
+            loadingText="Loading regions..."
+            placeholder="Select regions"
+            filteringType="auto"
+            tokenLimit={5}
+            statusType={regionsLoading ? 'loading' : 'finished'}
+          />
+        </FormField>
+      </SpaceBetween>
     </Container>
   );
 }
@@ -306,17 +332,19 @@ export function ExceptionsField({ exceptions, onExceptionsChange }: ExceptionsFi
 
 export function useRegionOptions() {
   const [regionOptions, setRegionOptions] = useState<MultiselectProps.Option[]>([]);
+  const [regions, setRegions] = useState<Region[]>([]);
   const [regionsLoading, setRegionsLoading] = useState(true);
 
   useEffect(() => {
     async function loadRegions() {
       setRegionsLoading(true);
       try {
-        const regions: Region[] = await capabilityInsightsClient.listRegions();
-        const options = regions.map(r => ({
-          value: r.Region,
-          label: r.Region,
-          description: r.RegionLongName,
+        const r: Region[] = await capabilityInsightsClient.listRegions();
+        setRegions(r);
+        const options = r.map(reg => ({
+          value: reg.Region,
+          label: reg.Region,
+          description: reg.RegionLongName,
         }));
         setRegionOptions(options);
       } catch {
@@ -328,5 +356,5 @@ export function useRegionOptions() {
     loadRegions();
   }, []);
 
-  return { regionOptions, regionsLoading };
+  return { regionOptions, regions, regionsLoading };
 }

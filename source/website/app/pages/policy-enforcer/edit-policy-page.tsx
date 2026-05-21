@@ -51,7 +51,7 @@ export default function EditPolicyPage() {
   const [policyType, setPolicyType] = useState<'IAM' | 'SCP'>('IAM');
   const [exceptions, setExceptions] = useState<ExceptionEntry[]>([]);
 
-  const { regionOptions, regionsLoading } = useRegionOptions();
+  const { regionOptions, regions, regionsLoading } = useRegionOptions();
 
   useEffect(() => {
     if (!policyId) return;
@@ -156,6 +156,7 @@ export default function EditPolicyPage() {
             selectedRegions={selectedRegions}
             onSelectedRegionsChange={setSelectedRegions}
             regionOptions={regionOptions}
+            regions={regions}
             regionsLoading={regionsLoading}
           />
           <ComputationModeField mode={mode} onModeChange={setMode} />

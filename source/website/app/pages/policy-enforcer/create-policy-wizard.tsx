@@ -65,7 +65,7 @@ export default function CreatePolicyWizard() {
     policyType: 'IAM',
   });
 
-  const { regionOptions, regionsLoading } = useRegionOptions();
+  const { regionOptions, regions, regionsLoading } = useRegionOptions();
 
   // Preview state
   const [previewActions, setPreviewActions] = useState<string[]>([]);
@@ -233,6 +233,7 @@ export default function CreatePolicyWizard() {
                 selectedRegions={state.selectedRegions}
                 onSelectedRegionsChange={opts => setState(prev => ({ ...prev, selectedRegions: opts }))}
                 regionOptions={regionOptions}
+                regions={regions}
                 regionsLoading={regionsLoading}
               />
             ),
