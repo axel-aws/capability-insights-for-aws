@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useCollection } from '@cloudscape-design/collection-hooks';
 import type { PropertyFilterQuery } from '@cloudscape-design/collection-hooks';
 import Table from '@cloudscape-design/components/table';
@@ -310,6 +310,21 @@ export default function AvailabilityTable<T extends RegionalAvailability>({
   });
 
   const allExpanded = hasNesting && (collectionProps.expandableRows?.expandedItems.length ?? 0) > 0;
+
+  // Auto-expand when filter narrows to 5 or fewer parent services
+  const filterQuery = propertyFilterProps.query;
+  useEffect(() => {
+    if (!hasNesting || !actions.setExpandedItems) return;
+    const hasActiveFilter = (filterQuery.tokens?.length ?? 0) > 0;
+    if (!hasActiveFilter) return;
+    // Count filtered parent items visible in the current results
+    const filteredParents = parentItems.filter(p =>
+      collectionItems.some(i => i.id === p.id) || collectionItems.some(i => i.parentId === p.id)
+    );
+    if (filteredParents.length > 0 && filteredParents.length <= 5) {
+      actions.setExpandedItems(filteredParents);
+    }
+  }, [filteredItemsCount]);
 
   const regionOptionValues = Object.values(AvailabilityStatus);
   const regionFilteringOptions = regions.flatMap(r =>
