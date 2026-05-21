@@ -171,6 +171,19 @@ export default function PolicyDetailPage() {
       }
     >
       <SpaceBetween size="l">
+        {policy.status === 'pending' && (
+          <Alert
+            type="info"
+            header="Policy generation required"
+            action={
+              <Button variant="primary" loading={refreshing} onClick={handleRefresh}>
+                Generate policy now
+              </Button>
+            }
+          >
+            Your policy configuration is saved. Click &quot;Generate policy now&quot; to compute the IAM allow-list based on your selected regions and settings. This process typically takes a few seconds.
+          </Alert>
+        )}
         <Container header={<Header variant="h2">Overview</Header>}>
           <ColumnLayout columns={3} variant="text-grid">
             <div>
