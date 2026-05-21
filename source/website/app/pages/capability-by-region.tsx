@@ -29,6 +29,8 @@ import type {
 import ServicesAndFeaturesTab from '~/components/tabs/ServicesAndFeaturesTab';
 import ApiOperationsTab from '~/components/tabs/ApiOperationsTab';
 import CfnResourcesTab from '~/components/tabs/CfnResourcesTab';
+import CapabilityByRegionHelpPanel from '~/components/help/CapabilityByRegionHelpPanel';
+import { useHelpPanel } from '~/contexts/help-panel-context';
 
 import type { RouteHandle } from '~/types/route';
 
@@ -39,6 +41,9 @@ export function meta() {
 }
 
 export default function CapabilityByRegion() {
+  const { setToolsContent } = useHelpPanel();
+  useEffect(() => { setToolsContent(<CapabilityByRegionHelpPanel />); }, []);
+
   const [regions, setRegions] = useState<Region[]>([]);
   const [productRows, setProductRows] = useState<ProductAvailability[]>([]);
   const [apiRows, setApiRows] = useState<ApiAvailability[]>([]);

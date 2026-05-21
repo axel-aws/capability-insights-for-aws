@@ -19,6 +19,8 @@ import { APP_NAME, PAGE_INFRASTRUCTURE_PLANNING } from '~/constants/app';
 import { infrastructurePlanningClient } from '~/clients/infrastructure-planning-client';
 import type { PlanConfiguration, PlanSourceType, PlanStatus } from '@capability-insights/shared/types/infrastructure-planning/plan-configuration';
 import { formatTimestamp } from '~/utils/time-utils';
+import { useHelpPanel } from '~/contexts/help-panel-context';
+import InfrastructurePlanningHelpPanel from '~/components/help/InfrastructurePlanningHelpPanel';
 import type { RouteHandle } from '~/types/route';
 
 export const handle: RouteHandle = { pageName: PAGE_INFRASTRUCTURE_PLANNING };
@@ -74,6 +76,8 @@ function LabelsCell({ plan }: { plan: PlanConfiguration }) {
 
 export default function InfrastructurePlanningPage() {
   const navigate = useNavigate();
+  const { setToolsContent } = useHelpPanel();
+  useEffect(() => { setToolsContent(<InfrastructurePlanningHelpPanel />); }, []);
   const [plans, setPlans] = useState<PlanConfiguration[]>([]);
   const [loading, setLoading] = useState(true);
   const [sourceTypeFilter, setSourceTypeFilter] = useState<SelectProps.Option>(SOURCE_TYPE_OPTIONS[0]);
@@ -138,7 +142,7 @@ export default function InfrastructurePlanningPage() {
       header={
         <Header
           variant="h1"
-          description="Upload IaC templates or analyze GitHub repositories to filter the availability table by your planned infrastructure."
+          description="Upload infrastructure templates to identify your AWS dependencies. Created plans are available as a filter on the Capabilities by Region page."
         >
           {PAGE_INFRASTRUCTURE_PLANNING}
         </Header>

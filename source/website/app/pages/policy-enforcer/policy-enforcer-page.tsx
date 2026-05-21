@@ -19,6 +19,8 @@ import { APP_NAME } from '~/constants/app';
 import { policyEnforcerClient } from '~/clients/policy-enforcer-client';
 import type { PolicyConfiguration, PolicyStatus } from '@capability-insights/shared/types/policy-enforcer/policy-configuration';
 import { formatTimestamp } from '~/utils/time-utils';
+import { useHelpPanel } from '~/contexts/help-panel-context';
+import PolicyEnforcerHelpPanel from '~/components/help/PolicyEnforcerHelpPanel';
 import type { RouteHandle } from '~/types/route';
 
 export const PAGE_POLICY_ENFORCER = 'Policy Enforcer';
@@ -96,6 +98,8 @@ function TagsCell({ policy }: { policy: PolicyConfiguration }) {
 
 export default function PolicyEnforcerPage() {
   const navigate = useNavigate();
+  const { setToolsContent } = useHelpPanel();
+  useEffect(() => { setToolsContent(<PolicyEnforcerHelpPanel />); }, []);
   const [policies, setPolicies] = useState<PolicyConfiguration[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshingIds, setRefreshingIds] = useState<Set<string>>(new Set());

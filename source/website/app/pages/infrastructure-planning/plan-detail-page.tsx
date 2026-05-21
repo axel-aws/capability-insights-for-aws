@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate, useLocation } from 'react-router';
 import ContentLayout from '@cloudscape-design/components/content-layout';
 import Header from '@cloudscape-design/components/header';
 import Container from '@cloudscape-design/components/container';
@@ -13,6 +13,7 @@ import ColumnLayout from '@cloudscape-design/components/column-layout';
 import Spinner from '@cloudscape-design/components/spinner';
 import Alert from '@cloudscape-design/components/alert';
 import Modal from '@cloudscape-design/components/modal';
+import Link from '@cloudscape-design/components/link';
 import Tabs from '@cloudscape-design/components/tabs';
 
 import { APP_NAME } from '~/constants/app';
@@ -62,6 +63,8 @@ function SourceTypeBadge({ sourceType }: { sourceType: PlanSourceType }) {
 export default function PlanDetailPage() {
   const { planId } = useParams<{ planId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [showCreatedFlash, setShowCreatedFlash] = useState(!!(location.state as { created?: boolean })?.created);
   const [plan, setPlan] = useState<PlanConfiguration | null>(null);
   const [capabilitySet, setCapabilitySet] = useState<CapabilitySet | null>(null);
   const [loading, setLoading] = useState(true);
@@ -229,6 +232,12 @@ export default function PlanDetailPage() {
       }
     >
       <SpaceBetween size="l">
+        {showCreatedFlash && (
+          <Alert type="success" dismissible onDismiss={() => setShowCreatedFlash(false)}>
+            Plan created. Your extracted services are now available as a filter on the{' '}
+            <Link href="/" variant="primary">Capabilities by Region</Link> page.
+          </Alert>
+        )}
         {plan.status === 'error' && plan.errorMessage && (
           <Alert type="error" header="Processing error">
             {plan.errorMessage}

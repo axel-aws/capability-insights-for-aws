@@ -162,7 +162,9 @@ export default function CreatePlanWizard() {
         repositoryUrl,
       });
 
-      navigate(`/infrastructure-planning/${plan.planId}`);
+      navigate(`/infrastructure-planning/${plan.planId}`, {
+        state: { created: true },
+      });
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Failed to create plan.');
     } finally {
