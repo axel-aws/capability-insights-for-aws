@@ -1,7 +1,7 @@
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { S3Client, HeadObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { S3BucketClient } from '../services/s3-client';
-import { EnvironmentKey, getEnv } from '../constants/environment';
+import { EnvironmentKey, getEnv, getOptionalEnv } from '../constants/environment';
 import { StatusCode } from '../constants/status-codes';
 import { corsHeaders } from '../types/api';
 import { buildResponse } from '../util/route-helpers';
@@ -61,6 +61,10 @@ const DATA_FILE_CONFIGS: Record<DataFile, DataFileConfig> = {
 
 const s3Client = new S3Client({});
 
+function getDataBucketName(): string {
+  return getOptionalEnv(EnvironmentKey.DATA_BUCKET_NAME) || getEnv(EnvironmentKey.WEBSITE_BUCKET_NAME);
+}
+
 function isAllowedFileName(name: string): name is DataFile {
   return ALLOWED_DATA_FILES.includes(name as DataFile);
 }
@@ -102,7 +106,7 @@ function validateFileNameAndContent(body: { fileName?: string; content?: string 
  */
 export async function getDataInfoRoute(_event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   try {
-    const bucketName = getEnv(EnvironmentKey.DATA_BUCKET_NAME);
+    const bucketName = getDataBucketName();
 
     const files = await Promise.all(
       ALLOWED_DATA_FILES.map(async fileName => {
@@ -153,7 +157,7 @@ export async function postDataUploadRoute(event: APIGatewayProxyEvent): Promise<
   const content = body.content as string;
 
   try {
-    const bucketName = getEnv(EnvironmentKey.DATA_BUCKET_NAME);
+    const bucketName = getDataBucketName();
     const s3 = new S3BucketClient(bucketName);
     const key = `data/json/${fileName}.json`;
 
@@ -195,7 +199,7 @@ export async function postMergePreviewRoute(event: APIGatewayProxyEvent): Promis
   const content = body.content as string;
 
   try {
-    const bucketName = getEnv(EnvironmentKey.DATA_BUCKET_NAME);
+    const bucketName = getDataBucketName();
     const s3 = new S3BucketClient(bucketName);
 
     // Generate a unique merge ID
@@ -291,7 +295,7 @@ export async function postMergeCommitRoute(event: APIGatewayProxyEvent): Promise
   const mergeId = body.mergeId;
 
   try {
-    const bucketName = getEnv(EnvironmentKey.DATA_BUCKET_NAME);
+    const bucketName = getDataBucketName();
     const s3 = new S3BucketClient(bucketName);
 
     // Read staged data

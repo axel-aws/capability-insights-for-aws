@@ -189,7 +189,9 @@ export default function PlanDetailPage() {
   }
 
   const resourceTypeItems = capabilitySet
-    ? capabilitySet.cfnResourceTypes.map(type => ({ type, category: 'CloudFormation' as const }))
+    ? capabilitySet.cfnResourceTypes
+        .filter(type => type !== 'AWS::CDK::Metadata')
+        .map(type => ({ type, category: 'CloudFormation' as const }))
     : [];
 
   const terraformTypeItems = capabilitySet
@@ -257,6 +259,13 @@ export default function PlanDetailPage() {
             {plan.errorMessage}
           </Alert>
         )}
+        {plan.status === 'ready' && capabilitySet &&
+          capabilitySet.cfnResourceTypes.length === 0 &&
+          capabilitySet.apiOperations.length === 0 && (
+          <Alert type="warning" header="No resources detected">
+            Analysis complete but no AWS resources were detected. This may happen if the repository doesn&apos;t contain supported IaC files in expected locations, or uses patterns not yet supported by the analyzer.
+          </Alert>
+        )}
 
         <Container header={<Header variant="h2">Overview</Header>}>
           <ColumnLayout columns={3} variant="text-grid">
@@ -310,7 +319,7 @@ export default function PlanDetailPage() {
               <Tabs
                 tabs={[
                   {
-                    label: `Resource Types (${capabilitySet.cfnResourceTypes.length})`,
+                    label: `Resource Types (${resourceTypeItems.length})`,
                     id: 'resource-types',
                     content: (
                       <Table
@@ -392,11 +401,11 @@ export default function PlanDetailPage() {
                     ),
                   },
                   {
-                    label: `Services (${capabilitySet.serviceNames.length})`,
+                    label: `Services (${capabilitySet.serviceNames.filter(n => n !== 'CDK').length})`,
                     id: 'services',
                     content: (
                       <Table
-                        items={capabilitySet.serviceNames.map(name => ({ name }))}
+                        items={capabilitySet.serviceNames.filter(n => n !== 'CDK').map(name => ({ name }))}
                         columnDefinitions={[
                           {
                             id: 'name',
