@@ -2,6 +2,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$SCRIPT_DIR/.."
 source "$SCRIPT_DIR/check-deps.sh"
 
 usage() {
@@ -163,53 +164,23 @@ cmd_deploy() {
   lambda_key="lambdaAssets-$(date +%s).zip"
   aws s3 cp "$SCRIPT_DIR/dist/lambda/lambdaAssets.zip" "s3://$deployment_assets_bucket_name/$lambda_key"
 
-  echo "── Uploading CloudFormation template ──"
-  local template_key="capability-insights-template-$(date +%s).json"
-  aws s3 cp "$SCRIPT_DIR/dist/template/capability-insights.template.json" "s3://$deployment_assets_bucket_name/$template_key"
-  local template_url="https://${deployment_assets_bucket_name}.s3.amazonaws.com/${template_key}"
-
-  echo "── Deploying CloudFormation stack (this will likely take ~15 minutes for first time deployment) ──"
-  AWS_PAGER="" aws cloudformation deploy \
-    --template-file "$SCRIPT_DIR/dist/template/capability-insights.template.json" \
-    --s3-bucket "$deployment_assets_bucket_name" \
-    --s3-prefix "cfn-templates" \
-    --stack-name CapabilityInsightsForAWS \
-    --parameter-overrides \
-      PrivateVpcId="$private_vpc_id" \
-      BackendSubnetId="$backend_subnet_id" \
-      ApiAccessSubnetId="$api_access_subnet_id" \
-      DeploymentAssetsBucketName="$deployment_assets_bucket_name" \
-      DeploymentAssetsBucketApiLambdaFunctionCodeZipPath="$lambda_key" \
-      SourceAccessPointArn="$source_access_point_arn" \
-      SourceFolders="$source_folders" \
-    --capabilities CAPABILITY_NAMED_IAM \
-    2>&1 | tee /tmp/cfn-deploy.log &
-  local deploy_pid=$!
-  local elapsed=0
-  local status="STARTING"
-  while kill -0 "$deploy_pid" 2>/dev/null; do
-    if (( elapsed % 15 == 0 )); then
-      status=$(aws cloudformation describe-stacks --stack-name CapabilityInsightsForAWS \
-        --query "Stacks[0].StackStatus" --output text 2>/dev/null) || status="CREATING"
-    fi
-    printf "\r  ⏳ %s (%dm %ds elapsed)" "$status" $((elapsed/60)) $((elapsed%60))
-    sleep 1
-    elapsed=$((elapsed + 1))
-  done
-  wait "$deploy_pid"
+  echo "── Deploying CloudFormation stack via CDK (this may take ~15 minutes for first deployment) ──"
+  cd "$ROOT_DIR/source/constructs"
+  npx cdk bootstrap --quiet 2>/dev/null || true
+  npx cdk deploy CapabilityInsightsForAWS --require-approval never \
+    --parameters PrivateVpcId="$private_vpc_id" \
+    --parameters BackendSubnetId="$backend_subnet_id" \
+    --parameters ApiAccessSubnetId="$api_access_subnet_id" \
+    --parameters DeploymentAssetsBucketName="$deployment_assets_bucket_name" \
+    --parameters DeploymentAssetsBucketApiLambdaFunctionCodeZipPath="$lambda_key" \
+    --parameters SourceAccessPointArn="$source_access_point_arn" \
+    --parameters SourceFolders="$source_folders" \
+    2>&1 | tee /tmp/cfn-deploy.log
   local deploy_exit=$?
-  printf "\r%60s\r" ""
+  cd "$ROOT_DIR"
+
   if [[ $deploy_exit -ne 0 ]]; then
-    echo "✗ Stack deployment failed."
-    if aws cloudformation describe-stacks --stack-name CapabilityInsightsForAWS --query "Stacks[0].StackStatus" --output text 2>/dev/null; then
-      echo "Recent failed events:"
-      aws cloudformation describe-stack-events \
-        --stack-name CapabilityInsightsForAWS \
-        --query "StackEvents[?ResourceStatus=='CREATE_FAILED'||ResourceStatus=='UPDATE_FAILED'].[LogicalResourceId,ResourceStatusReason]" \
-        --output table 2>/dev/null
-    else
-      echo "Stack was deleted after rollback. Check /tmp/cfn-deploy.log for details."
-    fi
+    echo "✗ Stack deployment failed. Check /tmp/cfn-deploy.log for details."
     exit 1
   fi
   echo "  ✓ Stack deployed."
@@ -222,22 +193,18 @@ cmd_deploy() {
 
   echo "── Deploying Usage Analysis stack ──"
   if [[ "$enable_usage_analysis" == "true" ]]; then
-    aws cloudformation deploy \
-      --template-file "$SCRIPT_DIR/dist/template/usage-analysis.template.json" \
-      --s3-bucket "$deployment_assets_bucket_name" \
-      --s3-prefix "cfn-templates" \
-      --stack-name CapabilityInsightsUsageAnalysis \
-      --parameter-overrides \
-        WebsiteBucketName="$website_bucket" \
-        WebsiteBucketArn="$website_bucket_arn" \
-        DeploymentAssetsBucketName="$deployment_assets_bucket_name" \
-        LambdaCodeZipPath="$lambda_key" \
-        CloudTrailBucketName="${cloudtrail_bucket:-}" \
-      --capabilities CAPABILITY_NAMED_IAM \
-      --no-cli-pager || true
+    cd "$ROOT_DIR/source/constructs"
+    npx cdk deploy CapabilityInsightsUsageAnalysis --require-approval never \
+      --parameters WebsiteBucketName="$website_bucket" \
+      --parameters WebsiteBucketArn="$website_bucket_arn" \
+      --parameters DeploymentAssetsBucketName="$deployment_assets_bucket_name" \
+      --parameters LambdaCodeZipPath="$lambda_key" \
+      --parameters CloudTrailBucketName="${cloudtrail_bucket:-}" \
+      || true
+    cd "$ROOT_DIR"
     echo "  ✓ Usage Analysis stack deployed."
 
-    # Get outputs from Usage Analysis stack
+    # Get outputs and update Insights stack
     local analysis_state_machine_arn cloudtrail_analyzer_lambda_name
     analysis_state_machine_arn=$(aws cloudformation describe-stacks \
       --stack-name CapabilityInsightsUsageAnalysis \
@@ -248,23 +215,19 @@ cmd_deploy() {
 
     if [[ -n "$analysis_state_machine_arn" && -n "$cloudtrail_analyzer_lambda_name" ]]; then
       echo "── Updating Insights stack with Usage Analysis outputs ──"
-      aws cloudformation deploy \
-        --template-file "$SCRIPT_DIR/dist/template/capability-insights.template.json" \
-        --s3-bucket "$deployment_assets_bucket_name" \
-        --s3-prefix "cfn-templates" \
-        --stack-name CapabilityInsightsForAWS \
-        --parameter-overrides \
-          PrivateVpcId="$private_vpc_id" \
-          BackendSubnetId="$backend_subnet_id" \
-          ApiAccessSubnetId="$api_access_subnet_id" \
-          DeploymentAssetsBucketName="$deployment_assets_bucket_name" \
-          DeploymentAssetsBucketApiLambdaFunctionCodeZipPath="$lambda_key" \
-          SourceAccessPointArn="$source_access_point_arn" \
-          SourceFolders="$source_folders" \
-          AnalysisStateMachineArn="$analysis_state_machine_arn" \
-          CloudTrailAnalyzerLambdaName="$cloudtrail_analyzer_lambda_name" \
-        --capabilities CAPABILITY_NAMED_IAM \
-        --no-cli-pager || true
+      cd "$ROOT_DIR/source/constructs"
+      npx cdk deploy CapabilityInsightsForAWS --require-approval never \
+        --parameters PrivateVpcId="$private_vpc_id" \
+        --parameters BackendSubnetId="$backend_subnet_id" \
+        --parameters ApiAccessSubnetId="$api_access_subnet_id" \
+        --parameters DeploymentAssetsBucketName="$deployment_assets_bucket_name" \
+        --parameters DeploymentAssetsBucketApiLambdaFunctionCodeZipPath="$lambda_key" \
+        --parameters SourceAccessPointArn="$source_access_point_arn" \
+        --parameters SourceFolders="$source_folders" \
+        --parameters AnalysisStateMachineArn="$analysis_state_machine_arn" \
+        --parameters CloudTrailAnalyzerLambdaName="$cloudtrail_analyzer_lambda_name" \
+        || true
+      cd "$ROOT_DIR"
       echo "  ✓ Insights stack updated with analysis integration."
     fi
   else
