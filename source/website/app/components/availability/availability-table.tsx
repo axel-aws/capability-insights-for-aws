@@ -333,8 +333,12 @@ export default function AvailabilityTable<T extends RegionalAvailability>({
     }
   }, [filteredItemsCount]);
 
+  const regionFilteringOptions = regions.flatMap(r =>
+    ['Available', 'Not Available', 'Not Expanding', 'Planning'].map(status => ({ propertyKey: `region:${r.Region}`, value: status })),
+  );
   const filteringOptions = [
     ...propertyFilterProps.filteringOptions,
+    ...regionFilteringOptions,
     ...(includeStackProperty ? stackFilteringOptions : []),
     ...(includePlanProperty ? planFilteringOptions : []),
   ];
