@@ -189,7 +189,7 @@ cmd_deploy() {
   get_account_and_region
   local website_bucket="capability-insights-website-${ACCOUNT_ID}-${REGION}"
   local website_bucket_arn="arn:aws:s3:::${website_bucket}"
-  aws s3 sync "$SCRIPT_DIR/dist/website/" "s3://$website_bucket/" --delete --exclude "data/*"
+  aws s3 sync "$SCRIPT_DIR/dist/website/" "s3://$website_bucket/" --delete --exclude "data/*" --exclude "api-config.json"
 
   echo "── Deploying Usage Analysis stack ──"
   if [[ "$enable_usage_analysis" == "true" ]]; then
