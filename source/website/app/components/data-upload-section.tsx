@@ -8,6 +8,8 @@ import Alert from '@cloudscape-design/components/alert';
 import SpaceBetween from '@cloudscape-design/components/space-between';
 import Box from '@cloudscape-design/components/box';
 import StatusIndicator from '@cloudscape-design/components/status-indicator';
+import FormField from '@cloudscape-design/components/form-field';
+import Input from '@cloudscape-design/components/input';
 import type { SelectProps } from '@cloudscape-design/components/select';
 import { DataFile, capabilityInsightsClient } from '~/clients/capability-insights-client';
 import type { DataFileInfo, UploadRecord } from '~/clients/capability-insights-client';
@@ -32,6 +34,7 @@ export function DataUploadSection() {
   const [validationError, setValidationError] = useState<string | null>(null);
   const [selectedBrowserFile, setSelectedBrowserFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [label, setLabel] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchFiles = async () => {
@@ -81,7 +84,7 @@ export function DataUploadSection() {
   };
 
   const handleUpload = async () => {
-    if (!selectedFile?.value || !selectedBrowserFile) return;
+    if (!selectedFile?.value || !selectedBrowserFile || !label.trim()) return;
 
     setUploading(true);
     setNotification(null);
@@ -89,7 +92,7 @@ export function DataUploadSection() {
       const dataFile = selectedFile.value as DataFile;
 
       // 1. Get presigned URL
-      const { uploadId, presignedUrl, s3Key } = await capabilityInsightsClient.getPresignedUrl(dataFile);
+      const { uploadId, presignedUrl, s3Key } = await capabilityInsightsClient.getPresignedUrl(dataFile, label.trim());
 
       // 2. Upload file directly to S3 via presigned URL
       const fileContent = await selectedBrowserFile.arrayBuffer();
@@ -111,6 +114,7 @@ export function DataUploadSection() {
       });
       setSelectedBrowserFile(null);
       setFileName(null);
+      setLabel('');
       if (fileInputRef.current) fileInputRef.current.value = '';
       await Promise.all([fetchFiles(), fetchUploads()]);
     } catch (e) {
@@ -189,11 +193,19 @@ export function DataUploadSection() {
 
           {validationError && <Alert type="error">{validationError}</Alert>}
 
+          <FormField label="Description" constraintText="Required. A short label for this upload.">
+            <Input
+              value={label}
+              onChange={({ detail }) => setLabel(detail.value)}
+              placeholder="e.g., EU ISO East region data"
+            />
+          </FormField>
+
           <Button
             variant="primary"
             onClick={handleUpload}
             loading={uploading}
-            disabled={!selectedBrowserFile || !selectedFile}
+            disabled={!selectedBrowserFile || !selectedFile || !label.trim()}
           >
             Upload
           </Button>

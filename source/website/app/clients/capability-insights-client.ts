@@ -146,8 +146,8 @@ export class CapabilityInsightsClient extends BaseApiClient {
     return this.get<DataFilesInfo>('/data/info');
   }
 
-  async getPresignedUrl(fileName: DataFile): Promise<PresignedUrlResponse> {
-    return this.post<PresignedUrlResponse>('/data/uploads/presigned', { fileName });
+  async getPresignedUrl(fileName: DataFile, label: string): Promise<PresignedUrlResponse> {
+    return this.post<PresignedUrlResponse>('/data/uploads/presigned', { fileName, label });
   }
 
   async completeUpload(uploadId: string, fileName: DataFile, s3Key: string, description?: string): Promise<UploadCompleteResponse> {

@@ -54,6 +54,11 @@ export default function CapabilityByRegion() {
 
   const [activeTabId, setActiveTabId] = useState(tabParam || 'products');
 
+  // Sync tab state when URL param changes (e.g., navigating from plan detail)
+  useEffect(() => {
+    if (tabParam) setActiveTabId(tabParam);
+  }, [tabParam]);
+
   const handleFilterChange = useCallback((_query: PropertyFilterQuery) => {}, []);
 
   const initialQuery = useMemo<PropertyFilterQuery | undefined>(() => {

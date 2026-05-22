@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router';
 import ContentLayout from '@cloudscape-design/components/content-layout';
 import Header from '@cloudscape-design/components/header';
@@ -206,6 +206,13 @@ export default function PlanDetailPage() {
     ? capabilitySet.apiOperations.map(op => ({ operation: op }))
     : [];
 
+  const defaultCapabilityTab = useMemo(() => {
+    if (resourceTypeItems.length > 0) return 'resource-types';
+    if (terraformTypeItems.length > 0) return 'terraform-types';
+    if (apiOperationItems.length > 0) return 'api-operations';
+    return 'services';
+  }, [resourceTypeItems.length, terraformTypeItems.length, apiOperationItems.length]);
+
   return (
     <ContentLayout
       header={
@@ -304,6 +311,7 @@ export default function PlanDetailPage() {
               </Box>
             ) : capabilitySet ? (
               <Tabs
+                activeTabId={defaultCapabilityTab}
                 tabs={[
                   {
                     label: `Resource Types (${resourceTypeItems.length})`,
