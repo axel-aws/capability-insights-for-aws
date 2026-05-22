@@ -49,12 +49,20 @@ export default function CfnResourcesTab({
 
   return (
     <SpaceBetween size="m">
-      <ViewSelector
-        selectedConvention={overlay.convention}
-        onChange={overlay.setConvention}
-        loading={overlay.loading}
-        disabled={!!overlay.error}
-      />
+      <SpaceBetween direction="horizontal" size="xs">
+        <ViewSelector
+          selectedConvention={overlay.convention}
+          onChange={overlay.setConvention}
+          loading={overlay.loading}
+          disabled={!!overlay.error}
+        />
+        <Button
+          iconName="status-info"
+          variant="icon"
+          ariaLabel="Info"
+          onClick={handleInfoClick}
+        />
+      </SpaceBetween>
       {overlay.error && (
         <Flashbar
           items={[
@@ -96,17 +104,7 @@ export default function CfnResourcesTab({
         loading={loading}
         includeStackProperty
         includePlanProperty
-        headerActions={
-          <>
-            {externalHeaderActions}
-            <Button
-              iconName="status-info"
-              variant="icon"
-              ariaLabel="Info"
-              onClick={handleInfoClick}
-            />
-          </>
-        }
+        headerActions={externalHeaderActions}
       />
     </SpaceBetween>
   );

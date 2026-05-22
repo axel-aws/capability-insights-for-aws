@@ -216,12 +216,25 @@ export default function ApiOperationsTab({
 
   return (
     <SpaceBetween size="m">
-      <ApiViewSelector
-        selectedView={apiViewMode}
-        onChange={onApiViewModeChange}
-        loading={classicApi.loading}
-        disabled={!!classicApi.error}
-      />
+      <SpaceBetween direction="horizontal" size="xs">
+        <ApiViewSelector
+          selectedView={apiViewMode}
+          onChange={onApiViewModeChange}
+          loading={classicApi.loading}
+          disabled={!!classicApi.error}
+        />
+        {apiViewMode === 'terraform-aws' && (
+          <Button
+            iconName="status-info"
+            variant="icon"
+            ariaLabel="Info about Terraform AWS availability"
+            onClick={() => {
+              setToolsContent(<TerraformAwsHelpPanel />);
+              setToolsOpen(true);
+            }}
+          />
+        )}
+      </SpaceBetween>
       {classicApi.error && (
         <Flashbar
           items={[
@@ -313,20 +326,7 @@ export default function ApiOperationsTab({
           loading={classicApi.loading}
           customFilteringFunction={terraformFilteringFunction}
           includePlanProperty
-          headerActions={
-            <>
-              {headerActions}
-              <Button
-                iconName="status-info"
-                variant="icon"
-                ariaLabel="Info about Terraform AWS availability"
-                onClick={() => {
-                  setToolsContent(<TerraformAwsHelpPanel />);
-                  setToolsOpen(true);
-                }}
-              />
-            </>
-          }
+          headerActions={headerActions}
         />
       )}
     </SpaceBetween>
