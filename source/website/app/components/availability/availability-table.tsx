@@ -340,8 +340,8 @@ export default function AvailabilityTable<T extends RegionalAvailability>({
   }));
   const statusFilteringOptions = [
     { propertyKey: 'status', value: 'Available' },
-    { propertyKey: 'status', value: 'Not Available' },
     { propertyKey: 'status', value: 'Not Expanding' },
+    { propertyKey: 'status', value: 'Planned' },
     { propertyKey: 'status', value: 'Planning' },
   ];
   const filteringOptions = [
