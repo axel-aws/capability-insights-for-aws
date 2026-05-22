@@ -103,10 +103,11 @@ export class CapabilityInsightsSampleEnvironmentStack extends cdk.Stack {
           {
             Effect: 'Allow',
             Principal: '*',
-            Action: 's3:GetObject',
-            Resource: cdk.Fn.sub(
-              'arn:${AWS::Partition}:s3:::capability-insights-website-${AWS::AccountId}-${AWS::Region}/*',
-            ),
+            Action: ['s3:GetObject', 's3:HeadObject', 's3:ListBucket'],
+            Resource: [
+              cdk.Fn.sub('arn:${AWS::Partition}:s3:::capability-insights-website-${AWS::AccountId}-${AWS::Region}'),
+              cdk.Fn.sub('arn:${AWS::Partition}:s3:::capability-insights-website-${AWS::AccountId}-${AWS::Region}/*'),
+            ],
           },
           {
             Effect: 'Allow',

@@ -1,5 +1,5 @@
-import { lazy, Suspense } from 'react';
-import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration } from 'react-router';
+import { lazy, Suspense, useEffect } from 'react';
+import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration, useMatches } from 'react-router';
 
 import Alert from '@cloudscape-design/components/alert';
 import { I18nProvider } from '@cloudscape-design/components/i18n';
@@ -15,6 +15,12 @@ export function links() {
 const AppShell = lazy(() => import('~/components/app-shell/app-shell'));
 
 export function Layout({ children }: { children: React.ReactNode }) {
+  const matches = useMatches();
+  useEffect(() => {
+    const pageName = (matches[matches.length - 1]?.handle as { pageName?: string })?.pageName;
+    document.title = pageName ? `${pageName} - Capability Insights for AWS` : 'Capability Insights for AWS';
+  }, [matches]);
+
   return (
     <html lang="en">
       <head>
