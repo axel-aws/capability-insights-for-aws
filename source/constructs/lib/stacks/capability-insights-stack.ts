@@ -390,6 +390,28 @@ export class CapabilityInsightsStack extends cdk.Stack {
     });
     dataUploadsTable.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
+    // Data Sources DynamoDB Table
+    const dataSourcesTableName = `${prefix}DataSources`;
+    const dataSourcesTable = new dynamodb.CfnTable(this, dataSourcesTableName, {
+      tableName: cdk.Fn.sub(`${dataSourcesTableName}-\${AWS::Region}`),
+      billingMode: 'PAY_PER_REQUEST',
+      sseSpecification: { sseEnabled: true },
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
+      keySchema: [{ attributeName: 'id', keyType: 'HASH' }],
+      attributeDefinitions: [
+        { attributeName: 'id', attributeType: 'S' },
+        { attributeName: 'arn', attributeType: 'S' },
+      ],
+      globalSecondaryIndexes: [
+        {
+          indexName: 'ArnIndex',
+          keySchema: [{ attributeName: 'arn', keyType: 'HASH' }],
+          projection: { projectionType: 'ALL' },
+        },
+      ],
+    });
+    dataSourcesTable.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+
     // GitHub PAT Secret — stores the GitHub Personal Access Token in Secrets Manager
     const secretName = `${prefix}GitHubPAT`;
     const githubPatSecret = new secretsmanager.CfnSecret(this, secretName, {
@@ -428,11 +450,6 @@ export class CapabilityInsightsStack extends cdk.Stack {
                 Effect: 'Allow',
                 Action: 's3:GetObject',
                 Resource: '*',
-                Condition: {
-                  StringEquals: {
-                    's3:DataAccessPointArn': sourceAccessPointArnParameter.valueAsString,
-                  },
-                },
               },
               {
                 Effect: 'Allow',
@@ -494,6 +511,19 @@ export class CapabilityInsightsStack extends cdk.Stack {
             ],
           },
         },
+        {
+          policyName: 'DynamoDBDataSourcesAccess',
+          policyDocument: {
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: ['dynamodb:Scan', 'dynamodb:UpdateItem'],
+                Resource: cdk.Fn.getAtt(dataSourcesTable.logicalId, 'Arn').toString(),
+              },
+            ],
+          },
+        },
       ],
     });
     const dataFetchLambdaFunction = new lambda.CfnFunction(this, dataFetchLambdaName, {
@@ -516,6 +546,7 @@ export class CapabilityInsightsStack extends cdk.Stack {
           TERRAFORM_OVERLAY_FUNCTION_NAME: terraformOverlayLambdaName,
           POLICY_TABLE_NAME: cdk.Fn.ref(policyTable.logicalId),
           GITHUB_TOKEN_SECRET_NAME: cdk.Fn.ref(githubPatSecret.logicalId),
+          DATA_SOURCES_TABLE_NAME: cdk.Fn.ref(dataSourcesTable.logicalId),
         },
       },
     });
@@ -918,6 +949,31 @@ export class CapabilityInsightsStack extends cdk.Stack {
           },
         },
         {
+          policyName: 'DynamoDBDataSourcesTableAccess',
+          policyDocument: {
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: [
+                  'dynamodb:GetItem',
+                  'dynamodb:PutItem',
+                  'dynamodb:UpdateItem',
+                  'dynamodb:DeleteItem',
+                  'dynamodb:Query',
+                  'dynamodb:Scan',
+                ],
+                Resource: [
+                  cdk.Fn.getAtt(dataSourcesTable.logicalId, 'Arn').toString(),
+                  cdk.Fn.sub('${TableArn}/index/*', {
+                    TableArn: cdk.Fn.getAtt(dataSourcesTable.logicalId, 'Arn').toString(),
+                  }),
+                ],
+              },
+            ],
+          },
+        },
+        {
           policyName: 'SecretsManagerAccess',
           policyDocument: {
             Version: '2012-10-17',
@@ -959,6 +1015,7 @@ export class CapabilityInsightsStack extends cdk.Stack {
           GITHUB_TOKEN_SECRET_NAME: cdk.Fn.ref(githubPatSecret.logicalId),
           GITHUB_FETCH_FUNCTION_NAME: githubFetchLambdaName,
           DATA_UPLOADS_TABLE_NAME: cdk.Fn.ref(dataUploadsTable.logicalId),
+          DATA_SOURCES_TABLE_NAME: cdk.Fn.ref(dataSourcesTable.logicalId),
         },
       },
     });
@@ -1185,6 +1242,70 @@ def lambda_handler(event, context):
         ApiId: apigw.attrRestApiId,
       }),
     );
+
+    // Data Source Seed Lambda — seeds the default data source on stack create/update
+    const dataSourceSeedLambdaName = `${prefix}DataSourceSeedLambda`;
+    const dataSourceSeedLambdaRoleName = `${prefix}DataSourceSeedLambdaRole`;
+    const dataSourceSeedLambdaRole = new iam.CfnRole(this, dataSourceSeedLambdaRoleName, {
+      roleName: cdk.Fn.sub(`${dataSourceSeedLambdaRoleName}-\${AWS::Region}`),
+      assumeRolePolicyDocument: {
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: { Service: 'lambda.amazonaws.com' },
+            Action: 'sts:AssumeRole',
+          },
+        ],
+      },
+      managedPolicyArns: [cdk.Fn.sub('arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole')],
+      policies: [
+        {
+          policyName: 'DynamoDBDataSourcesSeedAccess',
+          policyDocument: {
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: ['dynamodb:Scan', 'dynamodb:PutItem'],
+                Resource: cdk.Fn.getAtt(dataSourcesTable.logicalId, 'Arn').toString(),
+              },
+            ],
+          },
+        },
+      ],
+    });
+    const dataSourceSeedLambdaFunction = new lambda.CfnFunction(this, dataSourceSeedLambdaName, {
+      functionName: dataSourceSeedLambdaName,
+      runtime: 'nodejs24.x',
+      handler: 'lambda/data-source-seed-lambda.handler',
+      role: cdk.Fn.getAtt(dataSourceSeedLambdaRole.logicalId, 'Arn').toString(),
+      code: {
+        s3Bucket: deploymentAssetsBucketNameParameter.valueAsString,
+        s3Key: deploymentAssetsBucketApiLambdaFunctionCodeZipPathParameter.valueAsString,
+      },
+      memorySize: 128,
+      timeout: 30,
+      environment: {
+        variables: {
+          DATA_SOURCES_TABLE_NAME: cdk.Fn.ref(dataSourcesTable.logicalId),
+        },
+      },
+    });
+    // Custom Resource that invokes the Seed Lambda on stack create/update
+    const dataSourceSeedCustomResource = new cdk.CfnCustomResource(
+      this,
+      `${prefix}DataSourceSeedCustomResource`,
+      {
+        serviceToken: cdk.Fn.getAtt(dataSourceSeedLambdaFunction.logicalId, 'Arn').toString(),
+      },
+    );
+    dataSourceSeedCustomResource.addPropertyOverride('TableName', cdk.Fn.ref(dataSourcesTable.logicalId));
+    dataSourceSeedCustomResource.addPropertyOverride(
+      'SourceAccessPointArn',
+      sourceAccessPointArnParameter.valueAsString,
+    );
+    dataSourceSeedCustomResource.addPropertyOverride('SourceFolders', sourceFoldersParameter.valueAsString);
 
     // Outputs for cross-stack references
     new cdk.CfnOutput(this, CapabilityInsightsStackOutputs.WebsiteBucketName, {
