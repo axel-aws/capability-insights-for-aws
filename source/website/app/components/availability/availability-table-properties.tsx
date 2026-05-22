@@ -488,16 +488,22 @@ export function createFilteringFunction(
 
   // --- Evaluate compound Region+Status within a token group ---
   const evaluateCompoundGroup = (item: RegionalAvailability, group: PropertyFilterTokenGroup): boolean => {
-    // Extract region and status tokens from this group
+    // Extract region and status tokens from this group (unwrap single-token groups)
     const regionTokens: PropertyFilterToken[] = [];
     const statusTokens: PropertyFilterToken[] = [];
     const otherTokens: (PropertyFilterToken | PropertyFilterTokenGroup)[] = [];
 
     for (const child of group.tokens) {
-      if (!isTokenGroup(child) && child.propertyKey === 'region') {
-        regionTokens.push(child);
-      } else if (!isTokenGroup(child) && child.propertyKey === 'status') {
-        statusTokens.push(child);
+      // Unwrap single-token groups
+      const token = isTokenGroup(child) && child.tokens.length === 1 && !isTokenGroup(child.tokens[0])
+        ? child.tokens[0] as PropertyFilterToken
+        : null;
+      const flat = token ?? (!isTokenGroup(child) ? child : null);
+
+      if (flat && flat.propertyKey === 'region') {
+        regionTokens.push(flat);
+      } else if (flat && flat.propertyKey === 'status') {
+        statusTokens.push(flat);
       } else {
         otherTokens.push(child);
       }
