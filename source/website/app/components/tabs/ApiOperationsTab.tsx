@@ -2,7 +2,6 @@ import { useMemo } from 'react';
 import SpaceBetween from '@cloudscape-design/components/space-between';
 import Link from '@cloudscape-design/components/link';
 import Flashbar from '@cloudscape-design/components/flashbar';
-import Button from '@cloudscape-design/components/button';
 import type { PropertyFilterQuery } from '@cloudscape-design/collection-hooks';
 
 import type { ApiAvailability } from '@capability-insights/shared/types/availability/regional-availability';
@@ -16,8 +15,6 @@ import ApiViewSelector from '~/components/availability/api-view-selector';
 import RegionalAvailabilityTypeBadge from '~/components/availability/regional-availability-type-badge';
 import AvailabilityStatusIndicator from '~/components/availability/availability-status-indicator';
 import MissingApiPopover from '~/components/availability/missing-api-popover';
-import TerraformAwsHelpPanel from '~/components/help/TerraformAwsHelpPanel';
-import { useHelpPanel } from '~/contexts/help-panel-context';
 
 import type { SharedTabProps } from './ServicesAndFeaturesTab';
 
@@ -44,7 +41,6 @@ export default function ApiOperationsTab({
   onFilterChange,
   headerActions,
 }: ApiOperationsTabProps) {
-  const { setToolsContent, setToolsOpen } = useHelpPanel();
 
   // Build a lookup for the Missing API Popover in the Terraform AWS view.
   // For each resource row that is "Not Available", we find its operation children
@@ -216,25 +212,12 @@ export default function ApiOperationsTab({
 
   return (
     <SpaceBetween size="m">
-      <SpaceBetween direction="horizontal" size="xs">
-        <ApiViewSelector
-          selectedView={apiViewMode}
-          onChange={onApiViewModeChange}
-          loading={classicApi.loading}
-          disabled={!!classicApi.error}
-        />
-        {apiViewMode === 'terraform-aws' && (
-          <Button
-            iconName="status-info"
-            variant="icon"
-            ariaLabel="Info about Terraform AWS availability"
-            onClick={() => {
-              setToolsContent(<TerraformAwsHelpPanel />);
-              setToolsOpen(true);
-            }}
-          />
-        )}
-      </SpaceBetween>
+      <ApiViewSelector
+        selectedView={apiViewMode}
+        onChange={onApiViewModeChange}
+        loading={classicApi.loading}
+        disabled={!!classicApi.error}
+      />
       {classicApi.error && (
         <Flashbar
           items={[

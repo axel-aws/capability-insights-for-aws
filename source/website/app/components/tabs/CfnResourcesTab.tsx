@@ -1,7 +1,6 @@
 import SpaceBetween from '@cloudscape-design/components/space-between';
 import Link from '@cloudscape-design/components/link';
 import Flashbar from '@cloudscape-design/components/flashbar';
-import Button from '@cloudscape-design/components/button';
 
 import type { CfnAvailability } from '@capability-insights/shared/types/availability/regional-availability';
 import type { ExportUrls } from '~/clients/capability-insights-client';
@@ -10,8 +9,6 @@ import type { UseTerraformOverlayResult } from '~/hooks/use-terraform-overlay';
 import AvailabilityTable from '~/components/availability/availability-table';
 import RegionalAvailabilityTypeBadge from '~/components/availability/regional-availability-type-badge';
 import ViewSelector from '~/components/availability/view-selector';
-import { useHelpPanel } from '~/contexts/help-panel-context';
-import CfnResourcesHelpPanel from '~/components/help/CfnResourcesHelpPanel';
 
 import type { SharedTabProps } from './ServicesAndFeaturesTab';
 
@@ -34,7 +31,6 @@ export default function CfnResourcesTab({
   onFilterChange,
   headerActions: externalHeaderActions,
 }: CfnResourcesTabProps) {
-  const { setToolsContent, setToolsOpen } = useHelpPanel();
   const translatedCfnRows = overlay.translateRows(cfnRows);
 
   const cfnTabLabel =
@@ -42,27 +38,14 @@ export default function CfnResourcesTab({
       ? 'CloudFormation resources'
       : 'Terraform AWSCC resources';
 
-  const handleInfoClick = () => {
-    setToolsContent(<CfnResourcesHelpPanel />);
-    setToolsOpen(true);
-  };
-
   return (
     <SpaceBetween size="m">
-      <SpaceBetween direction="horizontal" size="xs">
-        <ViewSelector
-          selectedConvention={overlay.convention}
-          onChange={overlay.setConvention}
-          loading={overlay.loading}
-          disabled={!!overlay.error}
-        />
-        <Button
-          iconName="status-info"
-          variant="icon"
-          ariaLabel="Info"
-          onClick={handleInfoClick}
-        />
-      </SpaceBetween>
+      <ViewSelector
+        selectedConvention={overlay.convention}
+        onChange={overlay.setConvention}
+        loading={overlay.loading}
+        disabled={!!overlay.error}
+      />
       {overlay.error && (
         <Flashbar
           items={[
