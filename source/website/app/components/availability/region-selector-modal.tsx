@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import Modal from '@cloudscape-design/components/modal';
 import Button from '@cloudscape-design/components/button';
 import SpaceBetween from '@cloudscape-design/components/space-between';
@@ -20,7 +20,7 @@ export default function RegionSelectorModal({
   onSelectionChange,
 }: RegionSelectorModalProps) {
   const [visible, setVisible] = useState(false);
-  const [draft, setDraft] = useState<Set<string>>(new Set(selectedRegionCodes));
+  const [draft, setDraft] = useState<Set<string>>(new Set());
 
   const grouped = useMemo(() => {
     const sorted = sortRegionsByCluster(regions);
@@ -33,82 +33,88 @@ export default function RegionSelectorModal({
     return map;
   }, [regions]);
 
-  const handleOpen = () => {
+  const handleOpen = useCallback(() => {
     setDraft(new Set(selectedRegionCodes));
     setVisible(true);
-  };
+  }, [selectedRegionCodes]);
 
-  const handleConfirm = () => {
-    onSelectionChange(draft);
+  const handleDismiss = useCallback(() => {
     setVisible(false);
-  };
+  }, []);
+
+  const handleConfirm = useCallback(() => {
+    onSelectionChange(new Set(draft));
+    setVisible(false);
+  }, [draft, onSelectionChange]);
 
   const toggleRegion = (code: string, checked: boolean) => {
-    const next = new Set(draft);
-    if (checked) next.add(code); else next.delete(code);
-    setDraft(next);
+    setDraft(prev => {
+      const next = new Set(prev);
+      if (checked) next.add(code); else next.delete(code);
+      return next;
+    });
   };
 
   const toggleCluster = (clusterRegions: Region[], checked: boolean) => {
-    const next = new Set(draft);
-    for (const r of clusterRegions) {
-      if (checked) next.add(r.Region); else next.delete(r.Region);
-    }
-    setDraft(next);
+    setDraft(prev => {
+      const next = new Set(prev);
+      for (const r of clusterRegions) {
+        if (checked) next.add(r.Region); else next.delete(r.Region);
+      }
+      return next;
+    });
   };
 
   return (
     <>
       <Button variant="primary" onClick={handleOpen}>Select Regions</Button>
-      {visible && (
-        <Modal
-          visible
-          onDismiss={() => setVisible(false)}
-          header="Select regions to display"
-          size="large"
-          footer={
-            <Box float="right">
-              <SpaceBetween direction="horizontal" size="xs">
-                <Button variant="link" onClick={() => setDraft(new Set(regions.map(r => r.Region)))}>Select all</Button>
-                <Button variant="link" onClick={() => setDraft(new Set())}>Clear all</Button>
-                <Button variant="link" onClick={() => setVisible(false)}>Cancel</Button>
-                <Button variant="primary" onClick={handleConfirm}>Apply ({draft.size} regions)</Button>
-              </SpaceBetween>
-            </Box>
-          }
-        >
-          <ColumnLayout columns={3}>
-            {[...grouped.entries()].map(([cluster, clusterRegions]) => {
-              const allChecked = clusterRegions.every(r => draft.has(r.Region));
-              const someChecked = clusterRegions.some(r => draft.has(r.Region));
-              return (
-                <div key={cluster}>
-                  <Checkbox
-                    checked={allChecked}
-                    indeterminate={someChecked && !allChecked}
-                    onChange={({ detail }) => toggleCluster(clusterRegions, detail.checked)}
-                  >
-                    <Box variant="strong">{cluster}</Box>
-                  </Checkbox>
-                  <Box padding={{ left: 'l' }}>
-                    <SpaceBetween size="xxs">
-                      {clusterRegions.map(r => (
-                        <Checkbox
-                          key={r.Region}
-                          checked={draft.has(r.Region)}
-                          onChange={({ detail }) => toggleRegion(r.Region, detail.checked)}
-                        >
-                          {r.Region}
-                        </Checkbox>
-                      ))}
-                    </SpaceBetween>
-                  </Box>
-                </div>
-              );
-            })}
-          </ColumnLayout>
-        </Modal>
-      )}
+      <Modal
+        visible={visible}
+        onDismiss={handleDismiss}
+        header="Select regions to display"
+        size="large"
+        footer={
+          <Box float="right">
+            <SpaceBetween direction="horizontal" size="xs">
+              <Button variant="link" onClick={() => setDraft(new Set(regions.map(r => r.Region)))}>Select all</Button>
+              <Button variant="link" onClick={() => setDraft(new Set())}>Clear all</Button>
+              <Button variant="link" onClick={handleDismiss}>Cancel</Button>
+              <Button variant="primary" onClick={handleConfirm}>Apply ({draft.size} regions)</Button>
+            </SpaceBetween>
+          </Box>
+        }
+      >
+        <ColumnLayout columns={3}>
+          {[...grouped.entries()].map(([cluster, clusterRegions]) => {
+            const allChecked = clusterRegions.every(r => draft.has(r.Region));
+            const someChecked = clusterRegions.some(r => draft.has(r.Region));
+            return (
+              <div key={cluster}>
+                <Checkbox
+                  checked={allChecked}
+                  indeterminate={someChecked && !allChecked}
+                  onChange={({ detail }) => toggleCluster(clusterRegions, detail.checked)}
+                >
+                  <Box variant="strong">{cluster}</Box>
+                </Checkbox>
+                <Box padding={{ left: 'l' }}>
+                  <SpaceBetween size="xxs">
+                    {clusterRegions.map(r => (
+                      <Checkbox
+                        key={r.Region}
+                        checked={draft.has(r.Region)}
+                        onChange={({ detail }) => toggleRegion(r.Region, detail.checked)}
+                      >
+                        {r.Region}
+                      </Checkbox>
+                    ))}
+                  </SpaceBetween>
+                </Box>
+              </div>
+            );
+          })}
+        </ColumnLayout>
+      </Modal>
     </>
   );
 }

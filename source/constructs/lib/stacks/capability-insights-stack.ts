@@ -120,6 +120,17 @@ export class CapabilityInsightsStack extends cdk.Stack {
         indexDocument: 'index.html',
         errorDocument: 'index.html',
       },
+      corsConfiguration: {
+        corsRules: [
+          {
+            allowedOrigins: ['*'],
+            allowedMethods: ['GET', 'PUT', 'POST', 'HEAD'],
+            allowedHeaders: ['*'],
+            exposedHeaders: ['ETag'],
+            maxAge: 3600,
+          },
+        ],
+      },
       bucketEncryption: {
         serverSideEncryptionConfiguration: [
           {
