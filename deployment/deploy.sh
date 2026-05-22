@@ -163,9 +163,16 @@ cmd_deploy() {
   lambda_key="lambdaAssets-$(date +%s).zip"
   aws s3 cp "$SCRIPT_DIR/dist/lambda/lambdaAssets.zip" "s3://$deployment_assets_bucket_name/$lambda_key"
 
+  echo "── Uploading CloudFormation template ──"
+  local template_key="capability-insights-template-$(date +%s).json"
+  aws s3 cp "$SCRIPT_DIR/dist/template/capability-insights.template.json" "s3://$deployment_assets_bucket_name/$template_key"
+  local template_url="https://${deployment_assets_bucket_name}.s3.amazonaws.com/${template_key}"
+
   echo "── Deploying CloudFormation stack (this will likely take ~15 minutes for first time deployment) ──"
   AWS_PAGER="" aws cloudformation deploy \
     --template-file "$SCRIPT_DIR/dist/template/capability-insights.template.json" \
+    --s3-bucket "$deployment_assets_bucket_name" \
+    --s3-prefix "cfn-templates" \
     --stack-name CapabilityInsightsForAWS \
     --parameter-overrides \
       PrivateVpcId="$private_vpc_id" \
@@ -217,6 +224,8 @@ cmd_deploy() {
   if [[ "$enable_usage_analysis" == "true" ]]; then
     aws cloudformation deploy \
       --template-file "$SCRIPT_DIR/dist/template/usage-analysis.template.json" \
+      --s3-bucket "$deployment_assets_bucket_name" \
+      --s3-prefix "cfn-templates" \
       --stack-name CapabilityInsightsUsageAnalysis \
       --parameter-overrides \
         WebsiteBucketName="$website_bucket" \
@@ -241,6 +250,8 @@ cmd_deploy() {
       echo "── Updating Insights stack with Usage Analysis outputs ──"
       aws cloudformation deploy \
         --template-file "$SCRIPT_DIR/dist/template/capability-insights.template.json" \
+        --s3-bucket "$deployment_assets_bucket_name" \
+        --s3-prefix "cfn-templates" \
         --stack-name CapabilityInsightsForAWS \
         --parameter-overrides \
           PrivateVpcId="$private_vpc_id" \
