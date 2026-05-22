@@ -168,26 +168,6 @@ export default function PlanDetailPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <ContentLayout header={<Header variant="h1">Loading...</Header>}>
-        <Box textAlign="center" padding="xxl">
-          <Spinner size="large" />
-        </Box>
-      </ContentLayout>
-    );
-  }
-
-  if (error || !plan) {
-    return (
-      <ContentLayout header={<Header variant="h1">Plan Detail</Header>}>
-        <Alert type="error" header="Error loading plan">
-          {error ?? 'Plan not found'}
-        </Alert>
-      </ContentLayout>
-    );
-  }
-
   const resourceTypeItems = capabilitySet
     ? capabilitySet.cfnResourceTypes
         .filter(type => type !== 'AWS::CDK::Metadata')
@@ -212,6 +192,26 @@ export default function PlanDetailPage() {
     if (apiOperationItems.length > 0) return 'api-operations';
     return 'services';
   }, [resourceTypeItems.length, terraformTypeItems.length, apiOperationItems.length]);
+
+  if (loading) {
+    return (
+      <ContentLayout header={<Header variant="h1">Loading...</Header>}>
+        <Box textAlign="center" padding="xxl">
+          <Spinner size="large" />
+        </Box>
+      </ContentLayout>
+    );
+  }
+
+  if (error || !plan) {
+    return (
+      <ContentLayout header={<Header variant="h1">Plan Detail</Header>}>
+        <Alert type="error" header="Error loading plan">
+          {error ?? 'Plan not found'}
+        </Alert>
+      </ContentLayout>
+    );
+  }
 
   return (
     <ContentLayout
