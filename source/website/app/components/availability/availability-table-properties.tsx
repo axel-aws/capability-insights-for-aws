@@ -15,7 +15,6 @@ import type { AvailabilityStatus } from '@capability-insights/shared/types/avail
 import type { StackResourcesResponse, PropertyMatch } from '@capability-insights/shared/types/capability/stack';
 import type { CapabilitySet } from '@capability-insights/shared/types/infrastructure-planning/plan-configuration';
 import AvailabilityStatusIndicator from '~/components/availability/availability-status-indicator';
-import { getRegionCluster } from '~/constants/region-clusters';
 
 const enumOperators: PropertyFilterProps.FilteringProperty['operators'] = [
   { operator: '=', tokenType: 'enum' },
@@ -89,13 +88,20 @@ export function createFilteringProperties(
       operators: enumOperators,
       group: 'properties',
     },
-    ...regions.map(r => ({
-      key: `region:${r.Region}`,
-      propertyLabel: `${r.RegionLongName} (${r.Region})`,
-      groupValuesLabel: `${getRegionCluster(r)} availability values`,
+    {
+      key: 'region',
+      propertyLabel: 'Region',
+      groupValuesLabel: 'Region values',
       operators: enumOperators,
-      group: getRegionCluster(r),
-    })),
+      group: 'properties',
+    },
+    {
+      key: 'status',
+      propertyLabel: 'Status',
+      groupValuesLabel: 'Availability status values',
+      operators: enumOperators,
+      group: 'properties',
+    },
   ];
 
   if (options?.includeStackProperty) {
@@ -385,9 +391,6 @@ export function createFilteringFunction(
 
   // --- Value resolution ---
   const resolveValue = (item: RegionalAvailability, key: string): string | undefined => {
-    if (key.startsWith('region:')) {
-      return item.regionalAvailability?.[key.slice(7)];
-    }
     // Walk parent chain for known keys
     let current: RegionalAvailability | undefined = item;
     while (current) {
@@ -461,11 +464,85 @@ export function createFilteringFunction(
     if (token.propertyKey === 'plan') {
       return evaluatePlanToken(item, token);
     }
+    if (token.propertyKey === 'region') {
+      // Standalone region token (no paired status): match if row has any value in that region
+      const regionCode = token.value as string;
+      const value = item.regionalAvailability?.[regionCode];
+      if (token.operator === '=') return value !== undefined && value !== null;
+      return value === undefined || value === null;
+    }
+    if (token.propertyKey === 'status') {
+      // Standalone status token (no paired region): match if row has that status in ANY region
+      const statusValue = token.value as string;
+      if (!item.regionalAvailability) return token.operator === '!=';
+      const values = Object.values(item.regionalAvailability);
+      if (token.operator === '=') return values.includes(statusValue as never);
+      return !values.includes(statusValue as never);
+    }
     if (!token.propertyKey) {
       return freeTextMatches(item, token);
     }
     const value = resolveValue(item, token.propertyKey);
     return tokenMatches(value, token);
+  };
+
+  // --- Evaluate compound Region+Status within a token group ---
+  const evaluateCompoundGroup = (item: RegionalAvailability, group: PropertyFilterTokenGroup): boolean => {
+    // Extract region and status tokens from this group
+    const regionTokens: PropertyFilterToken[] = [];
+    const statusTokens: PropertyFilterToken[] = [];
+    const otherTokens: (PropertyFilterToken | PropertyFilterTokenGroup)[] = [];
+
+    for (const child of group.tokens) {
+      if (!isTokenGroup(child) && child.propertyKey === 'region') {
+        regionTokens.push(child);
+      } else if (!isTokenGroup(child) && child.propertyKey === 'status') {
+        statusTokens.push(child);
+      } else {
+        otherTokens.push(child);
+      }
+    }
+
+    // If we have both region and status tokens, evaluate as compound
+    if (regionTokens.length > 0 && statusTokens.length > 0) {
+      // For AND groups: every region must match every status condition
+      // For OR groups: any region+status combination matches
+      const compoundResult = group.operation === 'and'
+        ? regionTokens.every(rt => {
+            const regionCode = rt.value as string;
+            const value = item.regionalAvailability?.[regionCode] ?? '';
+            return statusTokens.every(st => {
+              const statusValue = st.value as string;
+              if (rt.operator === '!=' && st.operator === '=') return value !== statusValue;
+              if (rt.operator === '=' && st.operator === '!=') return value !== statusValue;
+              if (rt.operator === '=' && st.operator === '=') return value === statusValue;
+              return value !== statusValue;
+            });
+          })
+        : regionTokens.some(rt => {
+            const regionCode = rt.value as string;
+            const value = item.regionalAvailability?.[regionCode] ?? '';
+            return statusTokens.some(st => {
+              const statusValue = st.value as string;
+              return rt.operator === '=' && st.operator === '='
+                ? value === statusValue
+                : value !== statusValue;
+            });
+          });
+
+      // Evaluate other tokens normally
+      if (otherTokens.length === 0) return compoundResult;
+      const otherResult = group.operation === 'and'
+        ? otherTokens.every(child => evaluate(item, child))
+        : otherTokens.some(child => evaluate(item, child));
+      return group.operation === 'and' ? compoundResult && otherResult : compoundResult || otherResult;
+    }
+
+    // No compound pair — evaluate normally
+    if (group.operation === 'and') {
+      return group.tokens.every(child => evaluate(item, child));
+    }
+    return group.tokens.length > 0 && group.tokens.some(child => evaluate(item, child));
   };
 
   // --- Recursive evaluate (mirrors Cloudscape defaultFilteringFunction) ---
@@ -474,12 +551,7 @@ export function createFilteringFunction(
     tokenOrGroup: PropertyFilterToken | PropertyFilterTokenGroup,
   ): boolean => {
     if (isTokenGroup(tokenOrGroup)) {
-      const { operation, tokens } = tokenOrGroup;
-      if (operation === 'and') {
-        return tokens.every(child => evaluate(item, child));
-      }
-      // 'or': return true if at least one child is true; empty 'or' returns false
-      return tokens.length > 0 && tokens.some(child => evaluate(item, child));
+      return evaluateCompoundGroup(item, tokenOrGroup);
     }
     return evaluateToken(item, tokenOrGroup);
   };
