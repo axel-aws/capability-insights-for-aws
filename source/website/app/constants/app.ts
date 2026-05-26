@@ -7,3 +7,4 @@ export const AWS_CAPABILITY_EXTERNAL = 'AWS Capabilities by Region';
 export const AWS_CAPABILITY_EXTERNAL_URL = 'https://builder.aws.com/build/capabilities';
 export const FEEDBACK_EXTERNAL = 'Feedback';
 export const FEEDBACK_EXTERNAL_URL = 'https://pulse.aws/survey/B5OFCN08';
+export const GITHUB_REPO_URL = 'https://github.com/aws/capability-insights-for-aws';

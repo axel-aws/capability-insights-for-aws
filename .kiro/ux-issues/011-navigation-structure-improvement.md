@@ -75,7 +75,7 @@ Replace the flat `items` array with a sectioned structure using CloudScape's `se
     {
       type: 'link',
       text: 'GitHub',
-      href: 'https://github.com/aws-samples/capability-insights-for-aws',
+      href: 'https://github.com/aws/capability-insights-for-aws',
       external: true,
     },
     {
@@ -94,7 +94,7 @@ In `source/website/app/constants/app.ts`, update:
 
 ```ts
 export const FEEDBACK_EXTERNAL_URL = 'https://pulse.aws/survey/YNDERBWH?p=0';
-export const GITHUB_REPO_URL = 'https://github.com/aws-samples/capability-insights-for-aws';
+export const GITHUB_REPO_URL = 'https://github.com/aws/capability-insights-for-aws';
 ```
 
 Remove `AWS_CAPABILITY_EXTERNAL` and `FEEDBACK_EXTERNAL` constants from the TopNavigation usage (they now live in the sidebar items array only).
@@ -164,7 +164,7 @@ Per the [CloudScape Side Navigation pattern](https://cloudscape.design/patterns/
 - [ ] Infrastructure Planning and Policy Enforcer have brief `info` text explaining their purpose
 - [ ] External links section (below divider) includes: AWS Capabilities by Region, GitHub, Feedback
 - [ ] Feedback link points to https://pulse.aws/survey/YNDERBWH?p=0
-- [ ] GitHub link points to https://github.com/aws-samples/capability-insights-for-aws
+- [ ] GitHub link points to https://github.com/aws/capability-insights-for-aws
 - [ ] Navigation is open by default on viewports >= 1200px
 - [ ] Navigation state persists across page navigations (already works via React state)
 - [ ] Breadcrumbs remain consistent with the new section structure
